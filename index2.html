@@ -14,6 +14,7 @@
             --border-color: #cccccc;
             --primary-color: #007bff;
             --text-color: #333;
+            --chart-height: 700px; /* 既定のグラフ高さをさらに拡大 */
         }
 
         body {
@@ -38,54 +39,46 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
+        /* Main split: left controls (functions & shift) + right chart */
+        .main-split {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        .left-panel {
+            width: 360px;
+            min-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
         .chart-container {
             flex-grow: 1;
             position: relative;
-            min-height: 300px;
+            height: var(--chart-height);
+            min-height: 400px;
         }
-
-        /* Control Rows */
-        .row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .row:last-child { margin-bottom: 0; }
-
-        h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-
-        /* Inputs & Buttons */
-        label { font-size: 14px; font-weight: bold; }
-        input[type="text"], input[type="number"], select {
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-        }
-        button {
-            padding: 6px 12px;
-            cursor: pointer;
-            background-color: #e0e0e0;
-            border: 1px solid #999;
-            border-radius: 3px;
-        }
-        button:hover { background-color: #d0d0d0; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        button.primary {
-            background-color: var(--primary-color);
-            color: white;
-            border: 1px solid #0056b3;
-        }
-        button.primary:hover { background-color: #0056b3; }
-
-        .status-bar {
-            padding: 5px 10px;
-            background: #ddd;
-            border: 1px solid #bbb;
-            font-size: 12px;
-            border-radius: 3px;
+        /* 待機オーバーレイ */
+        .overlay-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255,255,255,0.85);
+            padding: 12px 18px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            pointer-events: none;
+            display: none;
         }
 
         /* Specific widths */
@@ -95,6 +88,8 @@
         .error { border-color: #e00 !important; background: #ffecec; }
         .suggest-bar button { font-size: 12px; padding: 4px 8px; }
         @media (max-width: 800px) {
+            .main-split { flex-direction: column; }
+            .left-panel { width: 100%; min-width: auto; }
             .functions-container > div { flex-direction: column !important; }
             .row { flex-direction: column; align-items: flex-start; }
             .chart-container { min-height: 240px; }
@@ -150,7 +145,7 @@
                 <option value="">auto</option>
                 <option value="0.01">0.01</option>
                 <option value="0.1">0.1</option>
-                <option value="1">1</option>
+                <option value="1" selected>1</option>
                 <option value="10">10</option>
                 <option value="100">100</option>
                 <option value="1000">1000</option>
@@ -163,23 +158,26 @@
                 <option value="">auto</option>
                 <option value="0.01">0.01</option>
                 <option value="0.1">0.1</option>
-                <option value="1">1</option>
+                <option value="1" selected>1</option>
                 <option value="10">10</option>
                 <option value="100">100</option>
                 <option value="1000">1000</option>
             </select>
             
             <button id="btnUpdateAxis">範囲更新</button>
-            <label><input type="checkbox" id="chkLockAxis"> 範囲ロック</label>
             
             <label style="margin-left:10px;">文字サイズ: 
                 <select id="fontSize">
                     <option value="10">10</option>
-                    <option value="12" selected>12</option>
+                    <option value="12">12</option>
                     <option value="16">16</option>
-                    <option value="20">20</option>
+                    <option value="20" selected>20</option>
+                    <option value="24">24</option>
+                    <option value="28">28</option>
+                    <option value="32">32</option>
                 </select>
             </label>
+            
             <label style="margin-left:10px;">言語: 
                 <select id="langSelect" class="w-med">
                     <option value="ja" selected>日本語</option>
@@ -190,43 +188,34 @@
     </div>
 </div>
 
-<div class="chart-container">
-    <canvas id="myChart"></canvas>
-</div>
-
-<div class="functions-container">
-    <div style="display:flex; gap:20px;">
-        <div style="flex: 2;">
-            <h3>式の描画 (例: y = 2*x + 1)</h3>
-            <div id="funcList">
-                <div class="row">
-                    <span style="color:orange;">■</span> 式1: <input type="text" id="func1" class="w-large" placeholder="例: 0.5*x">
-                    範囲: <input type="number" id="xmin1" class="w-small" placeholder="min"> ～ <input type="number" id="xmax1" class="w-small" placeholder="max">
+<div class="main-split">
+    <div class="left-panel">
+        <div class="functions-container">
+            <div style="display:flex; gap:20px;">
+                <div style="flex: 2;">
+                    <h3>式の描画 (例: y = 2*x + 1)</h3>
+                    <div id="funcList">
+                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
+                            <div><span style="color:orange;">■</span> 式1: <input type="text" id="func1" class="w-large" placeholder="例: 0.5*x"></div>
+                            <div>範囲: <input type="number" id="xmin1" class="w-small" placeholder="min"> ～ <input type="number" id="xmax1" class="w-small" placeholder="max"></div>
+                        </div>
+                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
+                            <div><span style="color:green;">■</span> 式2: <input type="text" id="func2" class="w-large"></div>
+                            <div>範囲: <input type="number" id="xmin2" class="w-small"> ～ <input type="number" id="xmax2" class="w-small"></div>
+                        </div>
+                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
+                            <div><span style="color:red;">■</span> 式3: <input type="text" id="func3" class="w-large"></div>
+                            <div>範囲: <input type="number" id="xmin3" class="w-small"> ～ <input type="number" id="xmax3" class="w-small"></div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <button id="btnPlotFunc">関数を更新</button>
+                        <button id="btnClearFunc">クリア</button>
+                    </div>
                 </div>
-                <div class="row">
-                    <span style="color:green;">■</span> 式2: <input type="text" id="func2" class="w-large">
-                    範囲: <input type="number" id="xmin2" class="w-small"> ～ <input type="number" id="xmax2" class="w-small">
-                </div>
-                <div class="row">
-                    <span style="color:red;">■</span> 式3: <input type="text" id="func3" class="w-large">
-                    範囲: <input type="number" id="xmin3" class="w-small"> ～ <input type="number" id="xmax3" class="w-small">
-                </div>
-            </div>
-            <div class="row">
-                <button id="btnPlotFunc">関数を更新</button>
-                <button id="btnClearFunc">クリア</button>
-            </div>
-            <div class="row suggest-bar" id="funcSuggest">
-                <span style="font-size:12px;">サジェスト:</span>
-                <button type="button" data-expr="sin(x)">sin(x)</button>
-                <button type="button" data-expr="cos(x)">cos(x)</button>
-                <button type="button" data-expr="exp(x)">exp(x)</button>
-                <button type="button" data-expr="log(x)">log(x)</button>
-                <button type="button" data-expr="x^2">x^2</button>
             </div>
         </div>
-
-        <div style="flex: 1; border-left: 1px solid #eee; padding-left: 10px;">
+        <div class="functions-container">
             <h3>点群の平行移動</h3>
             <div class="row">
                 <label>ΔX(秒): <input type="number" id="shiftX" value="0" class="w-med"></label>
@@ -236,6 +225,12 @@
             </div>
             <button id="btnApplyShift">適用</button>
             <button id="btnClearShift">クリア</button>
+        </div>
+    </div>
+    <div class="right-panel">
+        <div class="chart-container">
+            <canvas id="myChart"></canvas>
+            <div id="waitingOverlay" class="overlay-center">2s</div>
         </div>
     </div>
 </div>
@@ -253,6 +248,8 @@ const state = {
     buffer: new Uint8Array(0),
     rawData: [], // {t: time_sec, d: dist_mm}
     startTime: null,
+    measureStartTs: null, // 計測開始時刻（記録開始とは別）
+    recordStartTs: null,  // 記録・プロット開始時刻（2秒待機後）
     isSimulation: false,
     simIntervalId: null,
     simT0: 0,
@@ -262,7 +259,6 @@ const state = {
     unit: 'm',
     shiftX: 0,
     shiftY: 0,
-    maxPoints: 5000,
     language: 'ja',
     
     // グラフ用
@@ -270,6 +266,9 @@ const state = {
 
     // 描画最適化用
     isChartUpdateRequested: false,
+    lastPlotTs: null, // 最後にプロットした時刻（秒）
+    plotIntervalMs: 60, // 描画間引き間隔（ミリ秒）
+    startDelayMs: 3000, // 開始後の描画待機時間（ミリ秒）
 };
 
 // Chart.js のインスタンス
@@ -279,17 +278,23 @@ let chart;
  * 初期化処理
  */
 window.addEventListener('DOMContentLoaded', () => {
+    // 1. グラフインスタンス生成
     initChart();
+    // 2. イベントリスナー登録（後でloadSettingsが値を反映した際の変更を拾えるように）
     setupEventListeners();
-    loadSettings(); // ★ 設定を読み込む
-    updateAxisInputsFromUnit(); // 初期単位に合わせる
-    
-    // 描画ループを開始
+    // 3. デフォルト単位に基づく軸初期化（保存設定が来る前のベース）
+    updateAxisInputsFromUnit();
+    // 4. 保存設定を読み込み（単位/フォント/高さ/関数等を上書き適用）
+    loadSettings();
+    // 5. 単位変更やシフト値を反映した全データ再描画（初期表示の不整合防止）
+    redrawAll();
+    // 6. 描画ループ開始
     requestAnimationFrame(chartUpdateLoop);
 });
 
 function initChart() {
     const ctx = document.getElementById('myChart').getContext('2d');
+    const initSize = parseInt(document.getElementById('fontSize')?.value || '12');
     chart = new Chart(ctx, {
         type: 'scatter',
         data: {
@@ -315,14 +320,16 @@ function initChart() {
                 x: {
                     type: 'linear',
                     position: 'bottom',
-                    title: { display: true, text: 'Time (s)' },
+                    title: { display: true, text: 'Time (s)', font: { size: initSize + 2 } },
                     min: 0,
-                    max: 20
+                    max: 20,
+                    ticks: { font: { size: initSize } }
                 },
                 y: {
-                    title: { display: true, text: 'Distance (m)' },
+                    title: { display: true, text: 'Distance (m)', font: { size: initSize + 2 } },
                     min: 0,
-                    max: 8
+                    max: 8,
+                    ticks: { font: { size: initSize } }
                 }
             },
             plugins: {
@@ -338,6 +345,38 @@ function initChart() {
             }
         }
     });
+}
+
+// フォントサイズ適用共通処理
+function applyFontSize(size) {
+    if (!chart) return;
+    // 既存オブジェクトの安全な確保
+    chart.options.scales.x.ticks.font = chart.options.scales.x.ticks.font || {};
+    chart.options.scales.y.ticks.font = chart.options.scales.y.ticks.font || {};
+    chart.options.scales.x.title.font = chart.options.scales.x.title.font || {};
+    chart.options.scales.y.title.font = chart.options.scales.y.title.font || {};
+    chart.options.scales.x.ticks.font.size = size;
+    chart.options.scales.y.ticks.font.size = size;
+    chart.options.scales.x.title.font.size = size + 2;
+    chart.options.scales.y.title.font.size = size + 2;
+    if (chart.options.plugins?.legend) {
+        chart.options.plugins.legend.labels = chart.options.plugins.legend.labels || {};
+        chart.options.plugins.legend.labels.font = chart.options.plugins.legend.labels.font || {};
+        chart.options.plugins.legend.labels.font.size = size;
+    }
+    // ツールチップ等にも反映
+    chart.options.plugins = chart.options.plugins || {};
+    chart.options.plugins.tooltip = chart.options.plugins.tooltip || {};
+    chart.options.plugins.tooltip.bodyFont = chart.options.plugins.tooltip.bodyFont || {};
+    chart.options.plugins.tooltip.titleFont = chart.options.plugins.tooltip.titleFont || {};
+    chart.options.plugins.tooltip.bodyFont.size = size;
+    chart.options.plugins.tooltip.titleFont.size = size + 2;
+    // グローバル既定も更新（新規要素に即時適用）
+    if (Chart && Chart.defaults && Chart.defaults.font) {
+        Chart.defaults.font.size = size;
+    }
+    // 再描画（非アニメーション）
+    chart.update('none');
 }
 
 function setupEventListeners() {
@@ -368,6 +407,7 @@ function setupEventListeners() {
         updateChartAxis();
     });
 
+
     // 言語切替
     document.getElementById('langSelect').addEventListener('change', (e) => {
         state.language = e.target.value;
@@ -379,23 +419,7 @@ function setupEventListeners() {
     document.getElementById('btnUpdateAxis').addEventListener('click', updateChartAxis);
     document.getElementById('fontSize').addEventListener('change', (e) => {
         const size = parseInt(e.target.value);
-        
-        // ヘルパー関数: fontオブジェクトがなければ作成してサイズをセット
-        const setFontSize = (scaleObj, subKey, fontSize) => {
-            if (!scaleObj[subKey]) scaleObj[subKey] = {};
-            if (!scaleObj[subKey].font) scaleObj[subKey].font = {};
-            scaleObj[subKey].font.size = fontSize;
-        };
-
-        // X軸の設定
-        setFontSize(chart.options.scales.x, 'ticks', size);
-        setFontSize(chart.options.scales.x, 'title', size + 2);
-
-        // Y軸の設定
-        setFontSize(chart.options.scales.y, 'ticks', size);
-        setFontSize(chart.options.scales.y, 'title', size + 2);
-
-        chart.update(); 
+        applyFontSize(size);
         saveSettings();
     });
 
@@ -414,17 +438,6 @@ function setupEventListeners() {
     ['func1','func2','func3'].forEach(id => {
         document.getElementById(id).addEventListener('input', () => validateExpression(id));
     });
-    // サジェストボタン
-    document.querySelectorAll('#funcSuggest button[data-expr]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = document.activeElement && /func[123]/.test(document.activeElement.id)
-                ? document.activeElement
-                : document.getElementById('func1');
-            target.value = btn.dataset.expr;
-            validateExpression(target.id);
-            updateFunctions();
-        });
-    });
     document.getElementById('btnApplyShift').addEventListener('click', () => {
         state.shiftX = parseFloat(document.getElementById('shiftX').value) || 0;
         state.shiftY = parseFloat(document.getElementById('shiftY').value) || 0;
@@ -439,17 +452,9 @@ function setupEventListeners() {
     });
     
     // 移動平均
-    document.getElementById('chkMovingAverage').addEventListener('change', (e) => {
-        redrawAll();
-    });
-    document.getElementById('movingAverageWindow').addEventListener('change', (e) => {
-        const val = parseInt(e.target.value);
-        if (!isNaN(val) && val > 0) {
-            state.movingAverageWindow = val;
-            redrawAll();
-        }
-    });
 }
+
+// グラフ高さ機能は削除（CSS固定または既定のレスポンシブに委ねる）
 
 /**
  * 単位切り替え時の軸プリセット更新
@@ -537,13 +542,34 @@ async function connectSerial() {
 function startMeasurement() {
     const isSim = document.getElementById('chkSim').checked;
     state.keepReading = true;
-    state.startTime = null;
-    state.rawData = []; // Start時にクリアするかどうか（仕様によるが今回はクリア）
+    state.startTime = null; // 互換のため未使用化（下位互換保持）
+    state.measureStartTs = null;
+    state.recordStartTs = null;
+    // 開始時に既存データをクリア
+    state.rawData = [];
+    // シフトも0にリセットし、UIへ反映
+    state.shiftX = 0;
+    state.shiftY = 0;
+    const sx = document.getElementById('shiftX');
+    const sy = document.getElementById('shiftY');
+    if (sx) sx.value = 0;
+    if (sy) sy.value = 0;
+    if (chart && chart.data && chart.data.datasets && chart.data.datasets[0]) {
+        chart.data.datasets[0].data.length = 0;
+        chart.update('none');
+    }
+    state.lastPlotTs = null; // 描画タイムスタンプを初期化（遅延判定のため）
     
     // ボタン状態
     document.getElementById('btnStart').disabled = true;
     document.getElementById('btnStop').disabled = false;
     document.getElementById('btnConnect').disabled = true;
+    setStatus(`${ Math.ceil(state.startDelayMs/1000) }s`);
+    const ov = document.getElementById('waitingOverlay');
+    if (ov) {
+        ov.textContent = `${Math.ceil(state.startDelayMs/1000)}s`;
+        ov.style.display = 'block';
+    }
 
     if (isSim) {
         startSimulation();
@@ -578,27 +604,24 @@ async function stopMeasurement() {
         setStatus('停止');
     }
 
-    // 自動保存CSV
-    //saveCSV(true); 
+    // 自動CSV保存は廃止（必要時はボタンで手動保存）
 }
 
 function resetData() {
-    stopMeasurement();
+    //stopMeasurement();
     state.rawData = [];
-    state.movingAverageData = [];
     state.startTime = null;
     // シフトのみ初期化（軸など設定は保持）
     state.shiftX = 0; state.shiftY = 0;
     document.getElementById('shiftX').value = 0;
     document.getElementById('shiftY').value = 0;
     chart.data.datasets[0].data.length = 0;
-    if (chart.data.datasets[1]) chart.data.datasets[1].data.length = 0;
     redrawAll();
     setStatus('データをクリアしました');
 }
 
 function factoryReset() {
-    stopMeasurement();
+   // stopMeasurement();
     localStorage.removeItem('tsd20WebSettings');
     setStatus('リセット: ページを再読み込みします');
     setTimeout(() => location.reload(), 500);
@@ -704,15 +727,38 @@ function startSimulation() {
 // データ追加とグラフ更新
 // ---------------------------------------------------------
 function addDataPoint(timestamp, dist_mm) {
-    if (state.startTime === null) state.startTime = timestamp;
+    // 計測開始時刻（最初の受信時刻）を記録
+    if (state.measureStartTs === null) state.measureStartTs = timestamp;
+    // 2秒後を記録・プロット開始時刻に設定
+    if (state.recordStartTs === null) {
+        state.recordStartTs = new Date(state.measureStartTs.getTime() + state.startDelayMs);
+    }
+    // 2秒待機中は記録・プロットともに行わない
+    if (timestamp < state.recordStartTs) {
+        const rem = (state.recordStartTs - timestamp) / 1000.0;
+        // 整数秒で残り時間を表示（切り上げ）
+        const remInt = Math.max(0, Math.ceil(rem));
+        setStatus(`${remInt}s`);
+        const ov = document.getElementById('waitingOverlay');
+        if (ov) ov.textContent = `${remInt}s`;
+        return;
+    }
+    // 記録開始後はオーバーレイを非表示
+    const ovAfter = document.getElementById('waitingOverlay');
+    if (ovAfter) ovAfter.style.display = 'none';
+    // 記録開始後の経過時間（ここをt=0にする）
+    const elapsed = (timestamp - state.recordStartTs) / 1000.0; // 秒
     
-    const elapsed = (timestamp - state.startTime) / 1000.0; // 秒
-    
-    // 目標時間到達チェック
+    // 目標時間到達チェック（記録開始からのduration）
     if (state.duration > 0 && elapsed >= state.duration) {
         stopMeasurement();
         setStatus(`完了: ${state.duration}秒到達`);
         return;
+    }
+    // 連続重複値の早期除外（起動直後の同一データ連発を抑制）
+    const last = state.rawData.length ? state.rawData[state.rawData.length - 1] : null;
+    if (last && last.d === dist_mm) {
+        return; // 前回と距離が完全一致ならスキップ
     }
 
     state.rawData.push({ t: elapsed, d: dist_mm });
@@ -728,77 +774,29 @@ function addDataPoint(timestamp, dist_mm) {
     
     y -= state.shiftY;
     
-    // Chart.jsへプッシュ
-    chart.data.datasets[0].data.push({x, y});
-
-    // 上限超過時に古いデータを削除
-    trimDataIfNeeded();
+    // Chart.jsへプッシュ（描画間引き: 一定間隔ごとに追加）
+    const nowMs = timestamp.getTime();
+    const lastMs = state.lastPlotTs ?? 0;
+    if (nowMs - lastMs >= state.plotIntervalMs) {
+        chart.data.datasets[0].data.push({x, y});
+        state.lastPlotTs = nowMs;
+        chart.update('none'); // アニメーションなし更新
+    }
 
     // 定期的に更新 (毎回updateすると重いので間引くか、requestAnimationFrameを使う手もあるが、
     // ここではシンプルに毎回呼ぶ。重ければデータ数制限を入れる)
-    // 自動スクロール(Lockされてない場合)
-    const chkLock = document.getElementById('chkLockAxis').checked;
-    if (!chkLock && state.duration === 0) {
-        // 無限モードなら最新を表示するようにX軸を動かす
+    // 無限モードなら最新を表示するようにX軸を動かす
+    if (state.duration === 0) {
         if (x > chart.options.scales.x.max) {
-             const range = chart.options.scales.x.max - chart.options.scales.x.min;
-             chart.options.scales.x.max = x;
-             chart.options.scales.x.min = x - range;
+            const range = chart.options.scales.x.max - chart.options.scales.x.min;
+            chart.options.scales.x.max = x;
+            chart.options.scales.x.min = x - range;
         }
     }
     
-    chart.update('none'); // アニメーションなし更新
+    // 更新は描画間引きの中で行う
 }
 
-function trimDataIfNeeded() {
-    const limit = state.maxPoints;
-    const len = state.rawData.length;
-    if (len <= limit) return;
-
-    // 全体を均等に間引く（stride間隔で採用）
-    const stride = Math.ceil(len / limit);
-    const newRaw = [];
-    for (let i = 0; i < len; i += stride) {
-        newRaw.push(state.rawData[i]);
-    }
-    // 最終点は必ず保持
-    if (newRaw.length === 0 || newRaw[newRaw.length - 1] !== state.rawData[len - 1]) {
-        newRaw.push(state.rawData[len - 1]);
-    }
-    state.rawData = newRaw;
-
-    // Chartデータを再構築（現在の単位・シフトを反映）
-    const rawDs = chart.data.datasets[0].data;
-    rawDs.length = 0;
-    const unit = state.unit;
-    const shiftX = state.shiftX;
-    const shiftY = state.shiftY;
-    for (const p of state.rawData) {
-        const x = p.t - shiftX;
-        let y = p.d;
-        if (unit === 'm') y /= 1000.0; else if (unit === 'cm') y /= 10.0;
-        y -= shiftY;
-        rawDs.push({ x, y });
-    }
-
-    // 移動平均の再計算・再構築
-    if (chart.data.datasets[1]) {
-        const maDs = chart.data.datasets[1].data;
-        maDs.length = 0;
-        if (document.getElementById('chkMovingAverage').checked) {
-            const windowSize = state.movingAverageWindow || 10;
-            const maData = calcMovingAverage(state.rawData, windowSize);
-            for (const p of maData) {
-                const x = p.t - shiftX;
-                let y = p.d;
-                if (unit === 'm') y /= 1000.0; else if (unit === 'cm') y /= 10.0;
-                y -= shiftY;
-                maDs.push({ x, y });
-            }
-        }
-    }
-    requestChartUpdate();
-}
 
 /**
  * シフト変更時などに全データを再計算して描画
@@ -806,9 +804,7 @@ function trimDataIfNeeded() {
 function redrawAll() {
     if (!chart) return;
     const rawDs = chart.data.datasets[0].data;
-    const maDs = chart.data.datasets[1] ? chart.data.datasets[1].data : null;
     rawDs.length = 0;
-    if (maDs) maDs.length = 0;
 
     for (const p of state.rawData) {
         const x = p.t - state.shiftX;
@@ -817,39 +813,11 @@ function redrawAll() {
         else if (state.unit === 'cm') y /= 10.0;
         y -= state.shiftY;
         rawDs.push({x, y});
-        if (maDs && document.getElementById('chkMovingAverage').checked) {
-            // 移動平均は後でまとめて計算するのでここでは追加しない
-        }
-    }
-
-    if (maDs && document.getElementById('chkMovingAverage').checked) {
-        const windowSize = state.movingAverageWindow || 10;
-        const maData = calcMovingAverage(state.rawData, windowSize);
-        for (const p of maData) {
-            const x = p.t - state.shiftX;
-            let y = p.d;
-            if (state.unit === 'm') y /= 1000.0;
-            else if (state.unit === 'cm') y /= 10.0;
-            y -= state.shiftY;
-            maDs.push({x, y});
-        }
     }
     requestChartUpdate();
 }
 
-function calcMovingAverage(data, windowSize) {
-    const maData = [];
-    for (let i = 0; i < data.length; i++) {
-        if (i < windowSize - 1) continue; // ウィンドウサイズ未満はスキップ
-        
-        const windowData = data.slice(i - windowSize + 1, i + 1);
-        const sum = windowData.reduce((acc, val) => acc + val.d, 0);
-        const avg = sum / windowData.length;
-        
-        maData.push({t: windowData[windowData.length - 1].t, d: avg});
-    }
-    return maData;
-}
+// calcMovingAverage 削除（移動平均機能廃止）
 
 // ---------------------------------------------------------
 // 関数描画 (y = f(x))
@@ -866,7 +834,7 @@ function updateFunctions() {
     const xMaxChart = chart.options.scales.x.max;
 
     inputs.forEach((inp, idx) => {
-        const datasetIndex = idx + 2; // 0:raw, 1:avg
+        const datasetIndex = idx + 1; // 0:raw の次から関数
         const dataArr = [];
         
         if (inp.expr.trim()) {
@@ -929,9 +897,9 @@ function validateExpression(id) {
 // 多言語辞書
 const i18nDict = {
     ja: {
-        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNG:'PNG保存', saveCSV:'CSV保存', updateAxis:'範囲更新', axisLock:'範囲ロック', fontSize:'文字サイズ', maxPoints:'最大点数', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', suggest:'サジェスト:', movingAverage:'移動平均を表示', windowSize:'ウィンドウサイズ:', shiftTitle:'点群の平行移動', displayOptions:'表示オプション', functionsTitle:'式の描画 (例: y = 2*x + 1)' },
+        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNG:'PNG保存', saveCSV:'CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)' },
     en: {
-        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNG:'Save PNG', saveCSV:'Save CSV', updateAxis:'Update Range', axisLock:'Lock Range', fontSize:'Font Size', maxPoints:'Max Points', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', suggest:'Suggest:', movingAverage:'Show Moving Avg', windowSize:'Window Size:', shiftTitle:'Point Shift', displayOptions:'Display Options', functionsTitle:'Function Plot (e.g. y = 2*x + 1)' }
+        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNG:'Save PNG', saveCSV:'Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)' }
 };
 
 function applyLanguage() {
@@ -946,16 +914,10 @@ function applyLanguage() {
         safeSet('btnSaveCSV', d.saveCSV);
         safeSet('btnPlotFunc', d.funcUpdate);
         safeSet('btnClearFunc', d.funcClear);
+        // グラフ高さラベルは削除済み
         const h3s = document.querySelectorAll('.functions-container h3');
         if (h3s[0]) h3s[0].textContent = d.functionsTitle;
         if (h3s[1]) h3s[1].textContent = d.shiftTitle;
-        if (h3s[2]) h3s[2].textContent = d.displayOptions;
-        const suggestSpan = document.querySelector('#funcSuggest span');
-        if (suggestSpan) suggestSpan.textContent = d.suggest;
-        const lockLabel = document.getElementById('chkLockAxis')?.parentNode;
-        if (lockLabel && lockLabel.lastChild && lockLabel.lastChild.nodeType === Node.TEXT_NODE) {
-            lockLabel.lastChild.textContent = ' ' + d.axisLock;
-        }
     } catch(e) {
         console.warn('applyLanguage error:', e);
     }
@@ -968,14 +930,18 @@ function setStatus(msg) {
     document.getElementById('statusBar').textContent = msg;
 }
 
-function saveCSV(auto=false) { // ← 引数 auto=false があります
-    if (state.rawData.length === 0) {
-        if(!auto) alert('データがありません'); // ← autoがtrueだとアラートを抑制しています
-        return;
-    }
-    let csvContent = "time_s,distance_mm\n";
-    state.rawData.forEach(row => {
-        csvContent += `${row.t},${row.d}\n`;
+function saveCSV(auto=false) {
+    // プロットしているデータ（単位・シフト適用済み）をCSV保存
+    const plotted = chart?.data?.datasets?.[0]?.data || [];
+    if (plotted.length === 0) {
+        if(!auto) alert('データがありません');
+        return;
+    }
+    // ヘッダはプロット基準（x,y）。yの単位を明示
+    const unitLabel = state.unit === 'm' ? 'm' : (state.unit === 'cm' ? 'cm' : 'mm');
+    let csvContent = `time_s,value_${unitLabel}\n`;
+    plotted.forEach(p => {
+        csvContent += `${p.x},${p.y}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -993,9 +959,21 @@ function saveCSV(auto=false) { // ← 引数 auto=false があります
 }
 
 function savePNG() {
+    // 背景を白にしてエクスポート
+    const canvas = document.getElementById('myChart');
+    const w = canvas.width;
+    const h = canvas.height;
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const ctx = out.getContext('2d');
+    // 白背景
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    // 元のチャートを重ねる
+    ctx.drawImage(canvas, 0, 0);
     const link = document.createElement('a');
     link.download = 'plot.png';
-    link.href = document.getElementById('myChart').toDataURL('image/png');
+    link.href = out.toDataURL('image/png');
     link.click();
     setStatus('PNG保存完了');
 }
@@ -1014,9 +992,7 @@ function saveSettings() {
         yMax: document.getElementById('yMax').value,
         xStep: document.getElementById('xStep').value,
         yStep: document.getElementById('yStep').value,
-        chkLockAxis: document.getElementById('chkLockAxis').checked,
         fontSize: document.getElementById('fontSize').value,
-        maxPoints: state.maxPoints, // ← stateから直接保存するように変更
         language: state.language,
         functions: [
             { expr: document.getElementById('func1').value, min: document.getElementById('xmin1').value, max: document.getElementById('xmax1').value },
@@ -1024,11 +1000,7 @@ function saveSettings() {
             { expr: document.getElementById('func3').value, min: document.getElementById('xmin3').value, max: document.getElementById('xmax3').value }
         ],
         shiftX: document.getElementById('shiftX').value,
-        shiftY: document.getElementById('shiftY').value,
-        movingAverage: {
-            enabled: document.getElementById('chkMovingAverage').checked,
-            window: document.getElementById('movingAverageWindow').value
-        }
+        shiftY: document.getElementById('shiftY').value
     };
     localStorage.setItem('tsd20WebSettings', JSON.stringify(settings));
 }
@@ -1050,13 +1022,12 @@ function loadSettings() {
         document.getElementById('xMax').value = s.xMax || '20';
         document.getElementById('yMin').value = s.yMin || '0';
         document.getElementById('yMax').value = s.yMax || '8';
-        document.getElementById('xStep').value = s.xStep || '';
-        document.getElementById('yStep').value = s.yStep || '';
-        document.getElementById('chkLockAxis').checked = s.chkLockAxis || false;
-        document.getElementById('fontSize').value = s.fontSize || '12';
-        state.maxPoints = parseInt(s.maxPoints || '5000');
+        document.getElementById('xStep').value = s.xStep || '1';
+        document.getElementById('yStep').value = s.yStep || '1';
+        document.getElementById('fontSize').value = s.fontSize || '20';
         state.language = s.language || 'ja';
         document.getElementById('langSelect').value = state.language;
+        // グラフ高さの設定は削除
         
         if (s.functions) {
             ['1','2','3'].forEach(i => {
@@ -1072,30 +1043,13 @@ function loadSettings() {
         state.shiftX = parseFloat(s.shiftX || '0');
         state.shiftY = parseFloat(s.shiftY || '0');
 
-        if (s.movingAverage) {
-            document.getElementById('chkMovingAverage').checked = s.movingAverage.enabled || false;
-            document.getElementById('movingAverageWindow').value = s.movingAverage.window || '10';
-            state.movingAverageWindow = parseInt(s.movingAverage.window || '10');
-            chart.data.datasets[1].hidden = !s.movingAverage.enabled;
-        }
+        // 移動平均設定読み込み廃止
 
         // 設定を反映
         updateChartAxis();
-        
-        // 文字サイズの適用（安全な書き方に変更）
         const size = parseInt(document.getElementById('fontSize').value);
-        const setFontSize = (scaleObj, subKey, fontSize) => {
-            if (!scaleObj[subKey]) scaleObj[subKey] = {};
-            if (!scaleObj[subKey].font) scaleObj[subKey].font = {};
-            scaleObj[subKey].font.size = fontSize;
-        };
-        setFontSize(chart.options.scales.x, 'ticks', size);
-        setFontSize(chart.options.scales.x, 'title', size + 2);
-        setFontSize(chart.options.scales.y, 'ticks', size);
-        setFontSize(chart.options.scales.y, 'title', size + 2);
-        
-        // 変更を反映するために更新
-        chart.update('none');
+        applyFontSize(size);
+        // グラフ高さ適用は削除
 
         setStatus('前回保存した設定を読み込みました');
         applyLanguage();
