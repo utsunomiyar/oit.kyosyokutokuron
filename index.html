@@ -1168,7 +1168,7 @@ function playBeep(mode = 1) {
         const gain = ctx.createGain();
         osc.type = 'triangle'; // 少し柔らかい音色
         // モードで周波数と長さを間延び気味に調整
-        const freq = mode === 2 ? 600 : 450; // 全体をさらに低めに設定
+        const freq = mode === 2 ? 800 : 600; // 全体をさらに低めに設定
         const dur = mode === 2 ? 0.5 : 0.3;  // より長めの持続
         osc.frequency.value = freq;
         // エンベロープ（フェードイン/アウト）で間延びした印象を強調
