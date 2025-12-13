@@ -169,6 +169,10 @@
         <span style="flex-grow:1"></span>
         <button id="btnSavePNG">📷 PNG保存</button>
         <button id="btnSaveCSV">💾 CSV保存</button>
+        <label style="margin-left:10px;">
+            <input type="file" id="csvFile" accept=".csv" style="display:none;">
+            <button id="btnLoadCSV">📥 CSV読み込み</button>
+        </label>
     </div>
     
     <div style="border-top: 1px solid #eee; margin-top:8px; padding-top:8px;">
@@ -538,6 +542,8 @@ function setupEventListeners() {
     // 保存
     document.getElementById('btnSavePNG').addEventListener('click', savePNG);
     document.getElementById('btnSaveCSV').addEventListener('click', saveCSV);
+    document.getElementById('btnLoadCSV').addEventListener('click', () => document.getElementById('csvFile').click());
+    document.getElementById('csvFile').addEventListener('change', handleCSVImport);
 
     // 関数・シフト
     document.getElementById('btnPlotFunc').addEventListener('click', () => {
@@ -1060,6 +1066,68 @@ function saveCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `data_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
     link.click();
+}
+
+// --------------------------------------------
+// CSV読み込み（Time(s),Distance(<unit>) 形式）
+// --------------------------------------------
+function handleCSVImport(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        try {
+            importCSV(reader.result);
+            setStatus('CSVを読み込みました');
+        } catch(err) {
+            console.error(err);
+            alert('CSVの読み込みに失敗しました');
+        } finally {
+            e.target.value = '';
+        }
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
+function importCSV(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length < 2) throw new Error('CSVが空です');
+    // 1行目はヘッダ: Time(s),Distance(<unit>)
+    const header = lines[0];
+    const m = header.match(/Distance\((m|cm|mm)\)/i);
+    const csvUnit = m ? m[1].toLowerCase() : null;
+    // 本体行を解析
+    const points = [];
+    for (let i = 1; i < lines.length; i++) {
+        const row = lines[i].trim();
+        if (!row) continue;
+        const cols = row.split(',');
+        if (cols.length < 2) continue;
+        const t = parseFloat(cols[0]);
+        const dUnit = parseFloat(cols[1]);
+        if (!isFinite(t) || !isFinite(dUnit)) continue;
+        // CSVはシフト・単位反映後の値なので、mmへ戻して保存
+        let d_mm;
+        if (csvUnit === 'm') d_mm = dUnit * 1000.0;
+        else if (csvUnit === 'cm') d_mm = dUnit * 10.0;
+        else if (csvUnit === 'mm') d_mm = dUnit;
+        else {
+            // ヘッダに単位がない場合は現在のUI単位として扱う
+            if (state && state.unit === 'm') d_mm = dUnit * 1000.0;
+            else if (state.unit === 'cm') d_mm = dUnit * 10.0;
+            else d_mm = dUnit;
+        }
+        // CSVのtはシフト後の値なので、シフトを逆算して元の時刻を推定
+        const t_raw = t + (state.shiftX || 0);
+        points.push({ t: t_raw, d: d_mm });
+    }
+    // 既存データを置き換え
+    state.rawData = points;
+    // 計測開始・記録開始時刻を現在に再設定（リアルタイム連携はせず静的表示）
+    state.measureStartTs = new Date();
+    state.recordStartTs = new Date();
+    // グラフへ反映
+    redrawAll();
 }
 
 function saveSettings() {
