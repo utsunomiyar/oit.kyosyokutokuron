@@ -108,6 +108,28 @@
         button.primary { background: var(--primary-color); color: white; border: none; }
         button.primary:hover { opacity: 0.9; }
 
+        /* 開始ボタン: 色だけ付与（赤） */
+        #btnStart {
+            background: #ff0000;
+            color: #fff;
+        }
+
+        /* 関数更新ボタン: 色だけ付与（緑） */
+        #btnPlotFunc {
+            background: #2e7d32;
+            color: #fff;
+            border-color: #27632a;
+        }
+        #btnPlotFunc:hover { background: #2e7d32; }
+
+        /* 適用ボタン: 色だけ付与（紫） */
+        #btnApplyShift {
+            background: #6f42c1;
+            color: #fff;
+            border-color: #5a36a0;
+        }
+        #btnApplyShift:hover { background: #6f42c1; }
+
         input, select { padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
 
         .status-bar {
@@ -157,9 +179,6 @@
                 <option value="5">5</option>
                 <option value="10">10</option>
                 <option value="20" selected>20</option>
-                <option value="30">30</option>
-                <option value="40">40</option>
-                <option value="50">50</option>
                 <option value="60">60</option>
             </select>
         </label>
@@ -170,7 +189,8 @@
         <button id="btnReset">データクリア</button>
         <button id="btnFactoryReset">リセット</button>
         <span style="flex-grow:1"></span>
-        <button id="btnSavePNG">📷 PNG保存</button>
+        <button id="btnSavePNGChart">📷 PNG保存(グラフ)</button>
+        <button id="btnSavePNGWithFunc">📷 PNG保存(グラフ+式)</button>
         <button id="btnSaveCSV">💾 CSV保存</button>
         <label style="margin-left:10px;">
             <input type="file" id="csvFile" accept=".csv" style="display:none;">
@@ -543,7 +563,8 @@ function setupEventListeners() {
     }
 
     // 保存
-    document.getElementById('btnSavePNG').addEventListener('click', savePNG);
+    document.getElementById('btnSavePNGChart').addEventListener('click', savePNGChart);
+    document.getElementById('btnSavePNGWithFunc').addEventListener('click', savePNGWithFunctions);
     document.getElementById('btnSaveCSV').addEventListener('click', saveCSV);
     document.getElementById('btnLoadCSV').addEventListener('click', () => document.getElementById('csvFile').click());
     document.getElementById('csvFile').addEventListener('change', handleCSVImport);
@@ -989,11 +1010,11 @@ function validateExpression(id) {
 
 const i18nDict = {
     ja: {
-        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNG:'PNG保存', saveCSV:'CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)',
+        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNGChart:'PNG保存(グラフ)', savePNGWithFunc:'PNG保存(グラフ+式)', saveCSV:'CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)',
         apply:'適用', plotInterval:'測定間隔(ms)'
     },
     en: {
-        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNG:'Save PNG', saveCSV:'Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)',
+        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNGChart:'Save PNG (Chart)', savePNGWithFunc:'Save PNG (Chart + Functions)', saveCSV:'Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)',
         apply:'Apply', plotInterval:'Sampling Interval (ms)'
     }
 };
@@ -1007,7 +1028,8 @@ function applyLanguage() {
         setTxt('btnStop', d.stop);
         setTxt('btnReset', d.dataClear);
         setTxt('btnFactoryReset', d.factoryReset);
-        setTxt('btnSavePNG', d.savePNG);
+        setTxt('btnSavePNGChart', d.savePNGChart);
+        setTxt('btnSavePNGWithFunc', d.savePNGWithFunc);
         setTxt('btnSaveCSV', d.saveCSV);
         setTxt('btnUpdateAxis', d.updateAxis);
         const lbl = document.getElementById('lblPlotInterval'); if (lbl) lbl.textContent = d.plotInterval;
@@ -1025,7 +1047,7 @@ function setStatus(msg) {
     if (el) el.textContent = msg;
 }
 
-function savePNG() {
+function savePNGChart() {
     const canvas = document.getElementById('myChart');
     const w = canvas.width;
     const h = canvas.height;
@@ -1040,6 +1062,115 @@ function savePNG() {
 
     const link = document.createElement('a');
     link.download = `plot_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
+    link.href = off.toDataURL('image/png');
+    link.click();
+}
+
+function savePNGWithFunctions() {
+    const canvas = document.getElementById('myChart');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const rangeLabel = (state?.language === 'en') ? 'Range' : '範囲';
+    const exprs = [
+        {
+            idx: 1,
+            label: '式1',
+            color: 'orange',
+            value: (document.getElementById('func1')?.value || '').trim(),
+            min: (document.getElementById('xmin1')?.value || ''),
+            max: (document.getElementById('xmax1')?.value || '')
+        },
+        {
+            idx: 2,
+            label: '式2',
+            color: 'green',
+            value: (document.getElementById('func2')?.value || '').trim(),
+            min: (document.getElementById('xmin2')?.value || ''),
+            max: (document.getElementById('xmax2')?.value || '')
+        },
+        {
+            idx: 3,
+            label: '式3',
+            color: 'red',
+            value: (document.getElementById('func3')?.value || '').trim(),
+            min: (document.getElementById('xmin3')?.value || ''),
+            max: (document.getElementById('xmax3')?.value || '')
+        }
+    ]
+    .filter(e => e.value)
+    .map(e => {
+        const hasRange = (e.min !== '') && (e.max !== '');
+        const rmin = hasRange ? parseFloat(e.min) : null;
+        const rmax = hasRange ? parseFloat(e.max) : null;
+        return { ...e, hasRange, rangeMin: rmin, rangeMax: rmax, rangeLabel };
+    });
+
+    const fontSize = parseInt(document.getElementById('fontSize')?.value || '16');
+    const padding = 12;
+    const lineH = Math.max(20, fontSize + 6);
+    const legendPaddingX = 8;
+    const legendPaddingY = 4;
+    // 下部の枠に必要な追加高さ（ラベル＋行数）
+    const extraH = exprs.length > 0 ? (fontSize + 8) /* legend height */ + exprs.length * lineH + padding * 2 + 8 : 0;
+
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h + extraH;
+    const ctx = off.getContext('2d');
+
+    // 背景
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, off.width, off.height);
+
+    // グラフ
+    ctx.drawImage(canvas, 0, 0);
+
+    // 下部に「式の描画」枠（legend付き）
+    if (extraH > 0) {
+        const functionsTitle = document.getElementById('functionsTitle')?.textContent || '式の描画 (例: y = 2*x + 1)';
+        const frameX = padding;
+        const frameY = h + padding;
+        const frameW = w - padding * 2;
+        const frameH = extraH - padding * 2;
+
+        // フレーム枠
+        ctx.strokeStyle = '#bbbbbb';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(frameX, frameY, frameW, frameH);
+
+        // Legend（枠上に乗るラベル背景）
+        ctx.font = `${fontSize}px sans-serif`;
+        ctx.textBaseline = 'top';
+        const textW = ctx.measureText(functionsTitle).width;
+        const legendW = textW + legendPaddingX * 2;
+        const legendH = fontSize + legendPaddingY * 2;
+        const legendX = frameX + 12;
+        const legendY = frameY - legendH / 2; // 上枠に半分食い込ませる
+
+        // ラベル背景（白で枠線を隠す）
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(legendX, legendY, legendW, legendH);
+        // ラベル文字
+        ctx.fillStyle = '#333333';
+        ctx.fillText(functionsTitle, legendX + legendPaddingX, legendY + legendPaddingY);
+
+        // リスト本体（枠内に描画）
+        let listY = frameY + legendH / 2 + 8; // ラベルの下から開始
+        exprs.forEach((e, idx) => {
+            // 色マーカー
+            ctx.fillStyle = e.color;
+            const markerY = listY + idx * lineH + Math.max(0, (lineH - 16) / 2);
+            ctx.fillRect(frameX + 8, markerY, 16, 16);
+            // テキスト
+            ctx.fillStyle = '#333333';
+            const baseText = `${e.label}: y = ${e.value}`;
+            const text = e.hasRange ? `${baseText}  (${e.rangeLabel}: ${e.rangeMin} ～ ${e.rangeMax})` : baseText;
+            ctx.fillText(text, frameX + 8 + 24, listY + idx * lineH);
+        });
+    }
+
+    const link = document.createElement('a');
+    link.download = `plot_with_functions_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
     link.href = off.toDataURL('image/png');
     link.click();
 }
@@ -1169,9 +1300,9 @@ function playBeep(mode = 1) {
         }
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'square'; // 矩形波
+        osc.type = 'triangle'; // 少し柔らかい音色
         // モードで周波数と長さを間延び気味に調整
-        const freq = mode === 2 ? 800 : 600; // 全体をさらに低めに設定
+        const freq = mode === 2 ? 600 : 450; // 全体をさらに低めに設定
         const dur = mode === 2 ? 0.5 : 0.3;  // より長めの持続
         osc.frequency.value = freq;
         // エンベロープ（フェードイン/アウト）で間延びした印象を強調
