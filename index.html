@@ -48,8 +48,9 @@
             min-height: 0; /* Flexboxの入れ子でスクロールさせるために必要 */
         }
         .left-panel {
-            width: 360px;
-            min-width: 320px;
+            flex-basis: 360px;
+            min-width: 250px;
+            max-width: 70%;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -60,6 +61,18 @@
             display: flex;
             flex-direction: column;
             min-width: 0; /* Flexboxの子要素がはみ出さないように */
+        }
+
+        /* リサイザー（仕切り線） */
+        .resizer {
+            width: 10px;
+            background: #cccccc;
+            cursor: col-resize;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .resizer:hover {
+            background: #999999;
         }
 
         .chart-container {
@@ -143,7 +156,7 @@
         /* Specific widths */
         .w-small { width: 60px; }
         .w-med { width: 100px; }
-        .w-large { width: 250px; }
+        .w-large { width: 100%; box-sizing: border-box; }
         .error { border-color: #e00 !important; background: #ffecec; }
 
         @media (max-width: 800px) {
@@ -271,15 +284,15 @@
                     <h3 id="functionsTitle">式の描画 (例: y = 2*x + 1)</h3>
                     <div id="funcList">
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div><span style="color:orange;">■</span> 式1: <input type="text" id="func1" class="w-large" placeholder="例: y=0.5*x"></div>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:orange; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式1:</span> <input type="text" id="func1" class="w-large" placeholder="例: y=0.5*x"></div>
                             <div>範囲: <input type="number" id="xmin1" class="w-small" placeholder="min"> ～ <input type="number" id="xmax1" class="w-small" placeholder="max"></div>
                         </div>
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div><span style="color:green;">■</span> 式2: <input type="text" id="func2" class="w-large"></div>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:green; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式2:</span> <input type="text" id="func2" class="w-large"></div>
                             <div>範囲: <input type="number" id="xmin2" class="w-small"> ～ <input type="number" id="xmax2" class="w-small"></div>
                         </div>
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div><span style="color:red;">■</span> 式3: <input type="text" id="func3" class="w-large"></div>
+                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:red; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式3:</span> <input type="text" id="func3" class="w-large"></div>
                             <div>範囲: <input type="number" id="xmin3" class="w-small"> ～ <input type="number" id="xmax3" class="w-small"></div>
                         </div>
                     </div>
@@ -321,6 +334,7 @@
             </div>
         </div>
     </div>
+    <div class="resizer"></div>
     <div class="right-panel">
         <div class="chart-container">
             <canvas id="myChart"></canvas>
@@ -383,9 +397,55 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     // 5. 反映
     redrawAll();
-    // 6. 描画ループ開始
+    // 6. リサイザー（左右パネルのリサイズ）初期化
+    initResizer();
+    // 7. 描画ループ開始
     requestAnimationFrame(chartUpdateLoop);
 });
+
+/**
+ * リサイザー初期化（左右パネルのドラッグリサイズ）
+ */
+function initResizer() {
+    const resizer = document.querySelector('.resizer');
+    const leftPanel = document.querySelector('.left-panel');
+    const mainSplit = document.querySelector('.main-split');
+    
+    if (!resizer || !leftPanel || !mainSplit) return;
+    
+    let isResizing = false;
+    
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const mainSplitRect = mainSplit.getBoundingClientRect();
+        const newWidth = e.clientX - mainSplitRect.left - 5; // リサイザー幅の半分を考慮
+        
+        const minWidth = 250;
+        const maxWidth = mainSplitRect.width * 0.7;
+        
+        if (newWidth >= minWidth && newWidth <= maxWidth) {
+            leftPanel.style.flexBasis = newWidth + 'px';
+            // グラフのリサイズを即座に反映
+            if (chart) chart.resize();
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+        }
+    });
+}
 
 function initChart() {
     const canvasEl = document.getElementById('myChart');
@@ -405,9 +465,9 @@ function initChart() {
                     pointRadius: 3,
                     showLine: false
                 },
-                { label: '式1', data: [], borderColor: 'orange', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
-                { label: '式2', data: [], borderColor: 'green', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
-                { label: '式3', data: [], borderColor: 'red', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' }
+                { label: '式1', data: [], backgroundColor: 'orange', borderColor: 'orange', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
+                { label: '式2', data: [], backgroundColor: 'green', borderColor: 'green', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
+                { label: '式3', data: [], backgroundColor: 'red', borderColor: 'red', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' }
             ]
         },
         options: {
@@ -703,7 +763,7 @@ function startMeasurement() {
     if (initRem <= 3) {
         playBeep(); // 初期表示が3のときに即ビープ
     }
-    // 待機中の独立タイマー（100ms間隔）
+    // 待機中の独立タイマー（50ms間隔で精度向上）
     if (state.countdownTimer) { clearInterval(state.countdownTimer); }
     state.countdownTimer = setInterval(() => {
         const now = Date.now();
@@ -723,7 +783,7 @@ function startMeasurement() {
                 if (ovDone) ovDone.style.display = 'none';
             }
         }
-    }, 100);
+    }, 50);
 
     if (isSim) {
         startSimulation();
@@ -1010,11 +1070,11 @@ function validateExpression(id) {
 
 const i18nDict = {
     ja: {
-        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNGChart:'PNG保存(グラフ)', savePNGWithFunc:'PNG保存(グラフ+式)', saveCSV:'CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)',
+        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNGChart:'📷 PNG保存(グラフ)', savePNGWithFunc:'📷 PNG保存(グラフ+式)', saveCSV:'💾 CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)',
         apply:'適用', plotInterval:'測定間隔(ms)'
     },
     en: {
-        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNGChart:'Save PNG (Chart)', savePNGWithFunc:'Save PNG (Chart + Functions)', saveCSV:'Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)',
+        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNGChart:'📷 Save PNG (Chart)', savePNGWithFunc:'📷 Save PNG (Chart + Functions)', saveCSV:'💾 Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)',
         apply:'Apply', plotInterval:'Sampling Interval (ms)'
     }
 };
@@ -1103,69 +1163,69 @@ function savePNGWithFunctions() {
         const hasRange = (e.min !== '') && (e.max !== '');
         const rmin = hasRange ? parseFloat(e.min) : null;
         const rmax = hasRange ? parseFloat(e.max) : null;
-        return { ...e, hasRange, rangeMin: rmin, rangeMax: rmax, rangeLabel };
+        // 入力値から「y = 」を削除
+        const cleanValue = preprocessExpression(e.value);
+        return { ...e, value: cleanValue, hasRange, rangeMin: rmin, rangeMax: rmax, rangeLabel };
     });
 
     const fontSize = parseInt(document.getElementById('fontSize')?.value || '16');
-    const padding = 12;
-    const lineH = Math.max(20, fontSize + 6);
-    const legendPaddingX = 8;
-    const legendPaddingY = 4;
-    // 下部の枠に必要な追加高さ（ラベル＋行数）
-    const extraH = exprs.length > 0 ? (fontSize + 8) /* legend height */ + exprs.length * lineH + padding * 2 + 8 : 0;
+    const padding = 20;
+    const lineH = fontSize + 12;
+    const markerSize = 12;
+    const markerMargin = 8;
+    
+    // 下部の枠に必要な追加高さを計算
+    // 式の行数 + パディング
+    const extraH = exprs.length > 0 ? exprs.length * lineH + padding * 2 : 0;
 
     const off = document.createElement('canvas');
-    off.width = w; off.height = h + extraH;
+    off.width = w;
+    off.height = h + extraH;
     const ctx = off.getContext('2d');
 
-    // 背景
+    // 背景（白で統一）
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, off.width, off.height);
 
-    // グラフ
+    // グラフを描画
     ctx.drawImage(canvas, 0, 0);
 
-    // 下部に「式の描画」枠（legend付き）
-    if (extraH > 0) {
-        const functionsTitle = document.getElementById('functionsTitle')?.textContent || '式の描画 (例: y = 2*x + 1)';
+    // 下部に式リストセクション（式が存在する場合）
+    if (exprs.length > 0) {
         const frameX = padding;
         const frameY = h + padding;
         const frameW = w - padding * 2;
         const frameH = extraH - padding * 2;
 
+        // 背景（薄いグレー）
+        ctx.fillStyle = '#f9f9f9';
+        ctx.fillRect(frameX, frameY, frameW, frameH);
+
         // フレーム枠
-        ctx.strokeStyle = '#bbbbbb';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#cccccc';
+        ctx.lineWidth = 2;
         ctx.strokeRect(frameX, frameY, frameW, frameH);
 
-        // Legend（枠上に乗るラベル背景）
+        // 式リスト
         ctx.font = `${fontSize}px sans-serif`;
-        ctx.textBaseline = 'top';
-        const textW = ctx.measureText(functionsTitle).width;
-        const legendW = textW + legendPaddingX * 2;
-        const legendH = fontSize + legendPaddingY * 2;
-        const legendX = frameX + 12;
-        const legendY = frameY - legendH / 2; // 上枠に半分食い込ませる
-
-        // ラベル背景（白で枠線を隠す）
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(legendX, legendY, legendW, legendH);
-        // ラベル文字
-        ctx.fillStyle = '#333333';
-        ctx.fillText(functionsTitle, legendX + legendPaddingX, legendY + legendPaddingY);
-
-        // リスト本体（枠内に描画）
-        let listY = frameY + legendH / 2 + 8; // ラベルの下から開始
+        let contentY = frameY + padding / 2;
+        
         exprs.forEach((e, idx) => {
-            // 色マーカー
+            const y = contentY + idx * lineH;
+            
+            // 色マーカー（正方形）
             ctx.fillStyle = e.color;
-            const markerY = listY + idx * lineH + Math.max(0, (lineH - 16) / 2);
-            ctx.fillRect(frameX + 8, markerY, 16, 16);
-            // テキスト
+            ctx.fillRect(frameX + 12, y + 2, markerSize, markerSize);
+            
+            // テキスト（*を×に、/を÷に置換）
             ctx.fillStyle = '#333333';
-            const baseText = `${e.label}: y = ${e.value}`;
-            const text = e.hasRange ? `${baseText}  (${e.rangeLabel}: ${e.rangeMin} ～ ${e.rangeMax})` : baseText;
-            ctx.fillText(text, frameX + 8 + 24, listY + idx * lineH);
+            ctx.textBaseline = 'top';
+            const displayValue = e.value.replace(/\*/g, '×').replace(/\//g, '÷');
+            const baseText = `${e.label}: y = ${displayValue}`;
+            const text = e.hasRange 
+                ? `${baseText}  [${e.rangeLabel}: ${e.rangeMin} ～ ${e.rangeMax}]` 
+                : baseText;
+            ctx.fillText(text, frameX + 12 + markerSize + markerMargin, y);
         });
     }
 
