@@ -3,1440 +3,951 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TSD20 リアルタイムプロット (Web版)</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+    <title>寿司カウント</title>
     <style>
-        :root {
-            --bg-color: #f5f5f5;
-            --panel-bg: #ffffff;
-            --border-color: #cccccc;
-            --primary-color: #007bff;
-            --text-color: #333;
-            --chart-height: 700px;
-        }
-
-        body {
-            font-family: sans-serif;
+        * {
             margin: 0;
-            padding: 10px;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            padding: 0;
             box-sizing: border-box;
         }
 
-        /* Layout Containers */
-        .controls-container, .chart-container, .functions-container {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             padding: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        /* Main split: left controls (functions & shift) + right chart */
-        .main-split {
-            display: flex;
-            gap: 10px;
-            align-items: stretch;
-            flex: 1; /* 残りの高さを埋める */
-            min-height: 0; /* Flexboxの入れ子でスクロールさせるために必要 */
-        }
-        .left-panel {
-            flex-basis: 360px;
-            min-width: 250px;
-            max-width: 70%;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            overflow-y: auto; /* コンテンツが多い場合はスクロール */
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
         }
-        .right-panel {
-            flex: 1;
+
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            color: white;
+        }
+
+        .app-title {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .settings-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .settings-button:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 1000px;
+            width: 100%;
+            margin-top: 60px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 2em;
+        }
+
+        .sushi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .sushi-item {
             display: flex;
             flex-direction: column;
-            min-width: 0; /* Flexboxの子要素がはみ出さないように */
+            align-items: center;
+            gap: 10px;
         }
 
-        /* リサイザー（仕切り線） */
-        .resizer {
-            width: 10px;
-            background: #cccccc;
-            cursor: col-resize;
-            user-select: none;
-            transition: background 0.2s;
-        }
-        .resizer:hover {
-            background: #999999;
-        }
-
-        .chart-container {
-            flex-grow: 1;
+        .plate-container {
             position: relative;
-            height: 100%; /* 親に合わせて高さを確保 */
-            min-height: 400px;
+            width: 120px;
+            height: 120px;
+            cursor: pointer;
+            transition: transform 0.1s ease;
         }
-        
-        /* 待機オーバーレイ */
-        .overlay-center {
+
+        .plate-container:hover {
+            transform: scale(1.05);
+        }
+
+        .plate-container:active {
+            transform: scale(0.95);
+        }
+
+        .plate-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .count-display {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 72px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .price-label {
+            font-size: 1.1em;
             font-weight: bold;
             color: #333;
-            background: rgba(255,255,255,0.85);
-            padding: 12px 18px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            pointer-events: none;
-            display: none;
-            z-index: 10;
+            text-align: center;
         }
 
-        /* Controls */
-        .row {
+        .price-yen {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .minus-button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .minus-button:hover {
+            background: #ff5252;
+            transform: scale(1.1);
+        }
+
+        .minus-button:active {
+            transform: scale(0.95);
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .summary-title {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+        }
+
+        .total-amount {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        /* その他の金額セクション */
+        .custom-amount-section {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .custom-amount-title {
+            font-size: 0.95em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .custom-amount-input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .custom-amount-input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-size: 0.9em;
+            min-width: 80px;
+        }
+
+        .custom-amount-add-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .custom-amount-add-button:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .custom-amount-add-button:active {
+            transform: scale(0.95);
+        }
+
+        .custom-amounts-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
+        }
+
+        .custom-amount-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 6px 10px;
+            display: flex;
             align-items: center;
-            margin-bottom: 5px;
-        }
-        
-        button {
-            cursor: pointer;
-            padding: 6px 12px;
-            border: 1px solid #999;
-            background: #eee;
-            border-radius: 3px;
-        }
-        button:hover { background: #ddd; }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        button.primary { background: var(--primary-color); color: white; border: none; }
-        button.primary:hover { opacity: 0.9; }
-
-        /* 開始ボタン: 色だけ付与（赤） */
-        #btnStart {
-            background: #ff0000;
-            color: #fff;
-        }
-
-        /* 関数更新ボタン: 色だけ付与（緑） */
-        #btnPlotFunc {
-            background: #2e7d32;
-            color: #fff;
-            border-color: #27632a;
-        }
-        #btnPlotFunc:hover { background: #2e7d32; }
-
-        /* 適用ボタン: 色だけ付与（紫） */
-        #btnApplyShift {
-            background: #6f42c1;
-            color: #fff;
-            border-color: #5a36a0;
-        }
-        #btnApplyShift:hover { background: #6f42c1; }
-
-        input, select { padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
-
-        .status-bar {
-            margin-top: auto;
-            padding: 5px 10px;
-            background: #e0e0e0;
-            border-radius: 4px;
+            gap: 8px;
             font-size: 0.9em;
         }
 
-        /* Specific widths */
-        .w-small { width: 60px; }
-        .w-med { width: 100px; }
-        .w-large { width: 100%; box-sizing: border-box; }
-        .error { border-color: #e00 !important; background: #ffecec; }
+        .custom-amount-item-price {
+            font-weight: bold;
+            color: #667eea;
+        }
 
-        @media (max-width: 800px) {
-            .main-split { flex-direction: column; }
-            .left-panel { width: 100%; min-width: auto; height: auto; }
-            .chart-container { min-height: 300px; }
+        .custom-amount-item-delete {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            font-size: 1.2em;
+            padding: 0;
+            line-height: 1;
+            transition: all 0.2s ease;
+        }
+
+        .custom-amount-item-delete:hover {
+            color: #ff5252;
+            transform: scale(1.2);
+        }
+
+        .reset-button, .settings-button-main {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .reset-button:hover, .settings-button-main:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .reset-button:active, .settings-button-main:active {
+            transform: scale(0.95);
+        }
+
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-button:hover {
+            color: #333;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+        }
+
+        .settings-section-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .background-setting {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .background-setting label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .background-setting input {
+            width: 100px;
+            height: 50px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .sushi-settings {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .sushi-setting-item {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .sushi-setting-item.empty {
+            background: #f9f9f9;
+        }
+
+        .setting-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .setting-input-group label {
+            font-weight: bold;
+            color: #555;
+            font-size: 0.9em;
+        }
+
+        .setting-input-group input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+
+        .setting-input-group input[type="color"] {
+            width: 100%;
+            height: 40px;
+            cursor: pointer;
+        }
+
+        .setting-input-group input[type="number"] {
+            width: 100%;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .modal-button {
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-save-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .modal-save-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-cancel-button {
+            background: #ddd;
+            color: #333;
+        }
+
+        .modal-cancel-button:hover {
+            background: #ccc;
+        }
+
+        .color-preview {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            border: 2px solid #ddd;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin-top: 80px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+                margin-bottom: 20px;
+            }
+
+            .sushi-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 20px;
+            }
+
+            .plate-container {
+                width: 100px;
+                height: 100px;
+            }
+
+            .count-display {
+                font-size: 1.5em;
+            }
+
+            .total-amount {
+                font-size: 2em;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+
+            .sushi-settings {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @keyframes scale-pop {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.3); }
+            100% { transform: translate(-50%, -50%) scale(1); }
         }
     </style>
 </head>
 <body>
+    <div class="top-bar">
+        <div class="app-title">🍣 寿司カウント</div>
+        <button class="settings-button" id="topSettingsButton">⚙️ 設定</button>
+    </div>
 
-<div class="controls-container">
-    <div class="row">
-        <button id="btnConnect" class="primary">📡 シリアル接続</button>
-        <label>ボーレート: <select id="baudRate">
-            <option value="9600">9600</option>
-            <option value="38400">38400</option>
-            <option value="115200">115200</option>
-            <option value="460800" selected>460800</option>
-        </select></label>
+    <div class="container">
+        <h1>🍣 寿司カウント 🍣</h1>
         
-        <label style="margin-left:10px;"><input type="checkbox" id="chkSim"> シミュレーション</label>
-
-        <label style="margin-left:15px;">単位: 
-            <input type="radio" name="unit" value="m" checked> m
-            <input type="radio" name="unit" value="cm"> cm
-            <input type="radio" name="unit" value="mm"> mm
-        </label>
-
-        <label style="margin-left:10px;">計測時間(s): 
-            <select id="duration" class="w-small">
-                <option value="0">∞</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
-                <option value="60">60</option>
-            </select>
-        </label>
-    </div>
-    <div class="row">
-        <button id="btnStart">開始</button>
-        <button id="btnStop" disabled>停止</button>
-        <button id="btnReset">データクリア</button>
-        <button id="btnFactoryReset">リセット</button>
-        <span style="flex-grow:1"></span>
-        <button id="btnSavePNGChart">📷 PNG保存(グラフ)</button>
-        <button id="btnSavePNGWithFunc">📷 PNG保存(グラフ+式)</button>
-        <button id="btnSaveCSV">💾 CSV保存</button>
-        <label style="margin-left:10px;">
-            <input type="file" id="csvFile" accept=".csv" style="display:none;">
-            <button id="btnLoadCSV">📥 CSV読み込み</button>
-        </label>
-    </div>
-    
-    <div style="border-top: 1px solid #eee; margin-top:8px; padding-top:8px;">
-        <div class="row">
-            <label>X軸(最小/最大/刻み):</label>
-            <input type="number" id="xMin" value="0" class="w-small">
-            <input type="number" id="xMax" value="20" class="w-small">
-            <select id="xStep" class="w-small">
-                <option value="">auto</option>
-                <option value="0.01">0.01</option>
-                <option value="0.1">0.1</option>
-                <option value="1" selected>1</option>
-                <option value="10">10</option>
-            </select>
-
-            <label style="margin-left:10px;">Y軸(最小/最大/刻み):</label>
-            <input type="number" id="yMin" value="0" class="w-small">
-            <input type="number" id="yMax" value="8" class="w-small">
-            <select id="yStep" class="w-small">
-                <option value="">auto</option>
-                <option value="0.01">0.01</option>
-                <option value="0.1">0.1</option>
-                <option value="1" selected>1</option>
-                <option value="10">10</option>
-            </select>
-            
-            <button id="btnUpdateAxis">範囲更新</button>
-            
-            <label style="margin-left:10px;">文字サイズ: 
-                <select id="fontSize">
-                    <option value="10">10</option>
-                    <option value="12">12</option>
-                    <option value="16">16</option>
-                    <option value="20" selected>20</option>
-                    <option value="24">24</option>
-                    <option value="28">28</option>
-                    <option value="32">32</option>
-                </select>
-            </label>
-            
-            <label style="margin-left:10px;"><span id="lblPlotInterval">測定間隔(ms)</span>: 
-                <select id="plotInterval" class="w-small">
-                    <option value="0">0</option>
-                    <option value="10">10</option>
-                    <option value="20">20</option>
-                    <option value="30">30</option>
-                    <option value="40">40</option>
-                    <option value="50" selected>50</option>
-                    <option value="100">100</option>
-                    <option value="150">150</option>
-                    <option value="200" >200</option>
-                    <option value="300">300</option>
-                    <option value="400">400</option>
-                    <option value="500">500</option>
-                </select>
-            </label>
-            
-            <label style="margin-left:10px;">言語: 
-                <select id="langSelect" class="w-med">
-                    <option value="ja" selected>日本語</option>
-                    <option value="en">English</option>
-                </select>
-            </label>
+        <div class="sushi-grid" id="sushiGrid">
+            <!-- JavaScriptで動的に生成 -->
         </div>
-    </div>
-</div>
 
-<div class="main-split">
-    <div class="left-panel">
-        <div class="functions-container">
-            <div style="display:flex; gap:20px;">
-                <div style="flex: 2;">
-                    <h3 id="functionsTitle">式の描画</h3>
-                    <div id="funcList">
-                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:orange; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式1:</span> <input type="text" id="func1" class="w-large" placeholder="例: y=0.5*x"></div>
-                            <div>範囲: <input type="number" id="xmin1" class="w-small" placeholder="min"> ～ <input type="number" id="xmax1" class="w-small" placeholder="max"></div>
-                        </div>
-                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:green; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式2:</span> <input type="text" id="func2" class="w-large"></div>
-                            <div>範囲: <input type="number" id="xmin2" class="w-small"> ～ <input type="number" id="xmax2" class="w-small"></div>
-                        </div>
-                        <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
-                            <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:red; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式3:</span> <input type="text" id="func3" class="w-large"></div>
-                            <div>範囲: <input type="number" id="xmin3" class="w-small"> ～ <input type="number" id="xmax3" class="w-small"></div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <button id="btnPlotFunc">関数を更新</button>
-                        <button id="btnClearFunc">クリア</button>
-                    </div>
+        <div class="summary">
+            <div class="summary-title">合計金額</div>
+            <div class="total-amount" id="totalAmount">¥0</div>
+            
+            <!-- その他の金額セクション -->
+            <div class="custom-amount-section">
+                <div class="custom-amount-title">その他の金額</div>
+                <div class="custom-amount-input-group">
+                    <input type="number" id="customAmountInput" class="custom-amount-input" placeholder="金額を入力" min="0">
+                    <button class="custom-amount-add-button" id="addCustomAmountButton">追加</button>
+                </div>
+                <div class="custom-amounts-list" id="customAmountsList">
+                    <!-- JavaScriptで動的に生成 -->
                 </div>
             </div>
-        </div>
-        <div class="functions-container">
-            <h3 id="shiftTitle">点群の平行移動</h3>
-            <div class="row">
-                <label>ΔX(秒): <input type="number" id="shiftX" value="0" class="w-med"></label>
-            </div>
-            <div class="row">
-                <label>ΔY(単位): <input type="number" id="shiftY" value="0" class="w-med"></label>
-            </div>
-            <button id="btnApplyShift">適用</button>
-            <button id="btnClearShift">クリア</button>
-        </div>
-        <div class="controls-container" style="margin-top:6px;">
-            <div style="font-size: 0.95em; line-height: 1.6; display:flex; flex-direction: column; gap:8px;">
-                <div>
-                    <strong>説明（概要）:</strong></br>①「シリアル接続」を押し、USB serialを選択して接続します。</br>②「開始」を押すと、3・2・1のカウントダウン後にグラフへ描画されます。</br>③ 関数入力欄に <code>y = 2*x + 1</code> のように記述すると、グラフ上に関数線を重ねて表示できます。
-                </div>
-                <div>
-                    <strong>説明（オプション）:</strong>
-                    <ul style="margin:4px 0 0 18px; padding:0;">
-                        <li>単位: m/cm/mm の選択がY軸の表示に反映されます。</li>
-                        <li>計測時間(s): 0は∞（自動スクロール）。指定値で計測終了します。</li>
-                        <li>測定間隔(ms): 描画・記録の間引き間隔（0で間引き無し）。</li>
-                        <li>軸範囲・刻み: X/Yの最小・最大・刻みを設定できます。</li>
-                        <li>文字サイズ: 軸・凡例・ツールチップの文字サイズを変更します。</li>
-                        <li>点群の平行移動: ΔX（秒）/ΔY（単位）で点群をシフトできます。</li>
-                        <li>CSV保存: シフト・単位反映後のデータを出力します。</li>
-                    </ul>
-                </div>
+            
+            <div class="button-group">
+                <button class="reset-button" id="resetButton">リセット</button>
+                <button class="settings-button-main" id="settingsButton">⚙️ 設定</button>
             </div>
         </div>
     </div>
-    <div class="resizer"></div>
-    <div class="right-panel">
-        <div class="chart-container">
-            <canvas id="myChart"></canvas>
-            <div id="waitingOverlay" class="overlay-center">2s</div>
+
+    <!-- 設定モーダル -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>設定</span>
+                <button class="close-button" id="closeModalButton">&times;</button>
+            </div>
+
+            <!-- 背景色設定 -->
+            <div class="settings-section">
+                <div class="settings-section-title">背景色設定</div>
+                <div class="background-setting">
+                    <label for="bgColorInput">背景色を選択：</label>
+                    <input type="color" id="bgColorInput" value="#667eea">
+                    <div class="color-preview" id="bgColorPreview" style="background: #667eea;"></div>
+                </div>
+                <div class="background-setting">
+                    <label for="bgColorInput2">グラデーション色2：</label>
+                    <input type="color" id="bgColorInput2" value="#764ba2">
+                    <div class="color-preview" id="bgColorPreview2" style="background: #764ba2;"></div>
+                </div>
+                <div class="background-setting">
+                    <label for="textSizeInput">カウント数字の大きさ（em）：</label>
+                    <input type="number" id="textSizeInput" value="1.25" min="0.5" max="5" step="0.1">
+                </div>
+            </div>
+
+            <!-- お寿司設定 -->
+            <div class="settings-section">
+                <div class="settings-section-title">お寿司の品目設定（10種類）</div>
+                <div class="sushi-settings" id="sushiSettings">
+                    <!-- JavaScriptで動的に生成 -->
+                </div>
+            </div>
+
+            <!-- 保存ボタン -->
+            <div class="modal-buttons">
+                <button class="modal-button modal-save-button" id="saveSettingsButton">保存</button>
+                <button class="modal-button modal-cancel-button" id="cancelSettingsButton">キャンセル</button>
+            </div>
         </div>
     </div>
-</div>
 
-<div class="status-bar" id="statusBar">Ready</div>
+    <script>
+        // デフォルト設定
+        const defaultSushiPrices = [
+            { name: '玉子', price: 100, color: '#FFD700', textColor: '#CC7000' },
+            { name: 'マグロ', price: 150, color: '#8B0000', textColor: '#FF6B6B' },
+            { name: 'サーモン', price: 180, color: '#FF6B6B', textColor: '#CC0000' },
+            { name: 'エビ', price: 120, color: '#FF69B4', textColor: '#C71585' },
+            { name: 'イカ', price: 140, color: '#E6E6FA', textColor: '#663399' },
+            { name: 'ホタテ', price: 160, color: '#FFF8DC', textColor: '#CC7000' },
+            { name: 'ウニ', price: 200, color: '#FFB6C1', textColor: '#C71585' },
+            { name: 'トロ', price: 250, color: '#DC143C', textColor: '#FF6B6B' },
+            { name: '穴子', price: 130, color: '#8B4513', textColor: '#FFD700' },
+            { name: 'イクラ', price: 170, color: '#FF4500', textColor: '#CC3300' }
+        ];
 
-<script>
-/**
- * アプリケーションの状態管理
- */
-const state = {
-    port: null,
-    reader: null,
-    keepReading: false,
-    buffer: new Uint8Array(0),
-    rawData: [], // {t: time_sec, d: dist_mm}
-    startTime: null,
-    measureStartTs: null, // 計測開始時刻（記録開始とは別）
-    recordStartTs: null,  // 記録・プロット開始時刻（2秒待機後）
-    isSimulation: false,
-    simIntervalId: null,
-    simT0: 0,
-    
-    // 設定
-    duration: 20,
-    unit: 'm',
-    shiftX: 0,
-    shiftY: 0,
-    language: 'ja',
-    
-    // 描画最適化用
-    isChartUpdateRequested: false,
-    lastPlotTs: null, // 最後にプロットした時刻（秒）
-    plotIntervalMs: 50, // 描画間引き間隔（ミリ秒）
-    startDelayMs: 3000, // 開始後の描画待機時間（ミリ秒）
-    lastCountdownInt: null, // 直近の待機カウント（整数）
-    countdownTimer: null, // 待機中の独立タイマー
-};
-
-// Chart.js のインスタンス
-let chart;
-
-/**
- * 初期化処理
- */
-window.addEventListener('DOMContentLoaded', () => {
-    // 1. グラフインスタンス生成
-    initChart();
-    // 2. イベントリスナー登録
-    setupEventListeners();
-    // 3. 設定読み込みと反映
-    loadSettings();
-    // 4. 単位に基づく軸初期化（ロードした設定がある場合はそれを優先するためloadSettingsの後に確認）
-    if (!localStorage.getItem('tsd20WebSettings')) {
-        updateAxisInputsFromUnit();
-    }
-    // 5. 反映
-    redrawAll();
-    // 6. リサイザー（左右パネルのリサイズ）初期化
-    initResizer();
-    // 7. 描画ループ開始
-    requestAnimationFrame(chartUpdateLoop);
-});
-
-/**
- * リサイザー初期化（左右パネルのドラッグリサイズ）
- */
-function initResizer() {
-    const resizer = document.querySelector('.resizer');
-    const leftPanel = document.querySelector('.left-panel');
-    const mainSplit = document.querySelector('.main-split');
-    
-    if (!resizer || !leftPanel || !mainSplit) return;
-    
-    let isResizing = false;
-    
-    resizer.addEventListener('mousedown', (e) => {
-        isResizing = true;
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'col-resize';
-        e.preventDefault();
-    });
-    
-    document.addEventListener('mousemove', (e) => {
-        if (!isResizing) return;
-        
-        const mainSplitRect = mainSplit.getBoundingClientRect();
-        const newWidth = e.clientX - mainSplitRect.left - 5; // リサイザー幅の半分を考慮
-        
-        const minWidth = 250;
-        const maxWidth = mainSplitRect.width * 0.7;
-        
-        if (newWidth >= minWidth && newWidth <= maxWidth) {
-            leftPanel.style.flexBasis = newWidth + 'px';
-            // グラフのリサイズを即座に反映
-            if (chart) chart.resize();
-        }
-    });
-    
-    document.addEventListener('mouseup', () => {
-        if (isResizing) {
-            isResizing = false;
-            document.body.style.userSelect = '';
-            document.body.style.cursor = '';
-        }
-    });
-}
-
-function initChart() {
-    const canvasEl = document.getElementById('myChart');
-    // 高ズーム時でも物理サイズを保つため、親要素サイズに合わせてキャンバスの属性サイズを同期
-    setupResponsiveCanvas(canvasEl);
-    const ctx = canvasEl.getContext('2d');
-    const initSize = parseInt(document.getElementById('fontSize')?.value || '12');
-    chart = new Chart(ctx, {
-        type: 'scatter',
-        data: {
-            datasets: [
-                {
-                    label: '計測データ',
-                    data: [],
-                    backgroundColor: 'blue',
-                    borderColor: 'blue',
-                    pointRadius: 3,
-                    showLine: false
-                },
-                { label: '式1', data: [], backgroundColor: 'orange', borderColor: 'orange', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
-                { label: '式2', data: [], backgroundColor: 'green', borderColor: 'green', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' },
-                { label: '式3', data: [], backgroundColor: 'red', borderColor: 'red', borderWidth: 2, showLine: true, pointRadius: 0, fill: false, type: 'line' }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            scales: {
-                x: {
-                    type: 'linear',
-                    position: 'bottom',
-                    title: { display: true, text: 'Time (s)', font: { size: initSize + 2 } },
-                    min: 0,
-                    max: 20,
-                    ticks: { font: { size: initSize } }
-                },
-                y: {
-                    title: { display: true, text: 'Distance (m)', font: { size: initSize + 2 } },
-                    min: 0,
-                    max: 8,
-                    ticks: { font: { size: initSize } }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    mode: 'nearest',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return `(${context.parsed.x.toFixed(3)}, ${context.parsed.y.toFixed(3)})`;
-                        }
-                    },
-                    bodyFont: { size: initSize },
-                    titleFont: { size: initSize + 2 }
-                },
-                legend: {
-                    labels: { font: { size: initSize } }
-                }
-            }
-        }
-    });
-}
-
-// 親コンテナのクライアントサイズにキャンバスの属性(width/height)を同期させる
-function setupResponsiveCanvas(canvasEl) {
-    try {
-        const container = canvasEl.parentElement;
-        const syncSize = () => {
-            const w = container.clientWidth;
-            const h = container.clientHeight;
-            // 属性サイズを更新（描画解像度）
-            if (canvasEl.width !== w) canvasEl.width = w;
-            if (canvasEl.height !== h) canvasEl.height = h;
-            // スタイルでレイアウトサイズを100%に固定
-            canvasEl.style.width = '100%';
-            canvasEl.style.height = '100%';
-            if (chart) chart.resize();
-        };
-        // 初期同期
-        syncSize();
-        // リサイズ監視
-        const ro = new ResizeObserver(syncSize);
-        ro.observe(container);
-        // ズーム(DPR)変化にも追従
-        window.addEventListener('resize', syncSize);
-    } catch(e) { console.warn('setupResponsiveCanvas failed', e); }
-}
-
-// フォントサイズ適用共通処理
-function applyFontSize(size) {
-    if (!chart) return;
-    const setFontSize = (scaleObj, subKey, fontSize) => {
-        if (!scaleObj[subKey]) scaleObj[subKey] = {};
-        if (!scaleObj[subKey].font) scaleObj[subKey].font = {};
-        scaleObj[subKey].font.size = fontSize;
-    };
-
-    setFontSize(chart.options.scales.x, 'ticks', size);
-    setFontSize(chart.options.scales.x, 'title', size + 2);
-    setFontSize(chart.options.scales.y, 'ticks', size);
-    setFontSize(chart.options.scales.y, 'title', size + 2);
-
-    if (chart.options.plugins?.legend) {
-        if(!chart.options.plugins.legend.labels) chart.options.plugins.legend.labels = {};
-        if(!chart.options.plugins.legend.labels.font) chart.options.plugins.legend.labels.font = {};
-        chart.options.plugins.legend.labels.font.size = size;
-    }
-    
-    // Tooltip
-    if(!chart.options.plugins.tooltip) chart.options.plugins.tooltip = {};
-    if(!chart.options.plugins.tooltip.bodyFont) chart.options.plugins.tooltip.bodyFont = {};
-    if(!chart.options.plugins.tooltip.titleFont) chart.options.plugins.tooltip.titleFont = {};
-    chart.options.plugins.tooltip.bodyFont.size = size;
-    chart.options.plugins.tooltip.titleFont.size = size + 2;
-
-    chart.update('none');
-}
-
-function setupEventListeners() {
-    // シリアル / シミュレーション
-    document.getElementById('btnConnect').addEventListener('click', connectSerial);
-    document.getElementById('btnStart').addEventListener('click', startMeasurement);
-    document.getElementById('btnStop').addEventListener('click', stopMeasurement);
-    document.getElementById('btnReset').addEventListener('click', resetData);
-    document.getElementById('btnFactoryReset').addEventListener('click', factoryReset);
-    
-    // 設定変更
-    document.querySelectorAll('input[name="unit"]').forEach(r => {
-        r.addEventListener('change', (e) => {
-            state.unit = e.target.value;
-            updateAxisInputsFromUnit();
-            redrawAll();
-            saveSettings();
+        let sushiPrices = JSON.parse(JSON.stringify(defaultSushiPrices));
+        let backgroundColors = { color1: '#667eea', color2: '#764ba2' };
+        let textSize = 1.25; // 20pt
+        const counts = {};
+        let customAmounts = []; // その他の金額を管理
+        sushiPrices.forEach((_, index) => {
+            counts[index] = 0;
         });
-    });
-    
-    document.getElementById('duration').addEventListener('change', (e) => {
-        state.duration = parseInt(e.target.value);
-        const xMax = document.getElementById('xMax');
-        if(state.duration > 0) {
-            xMax.value = state.duration;
-        } else {
-            xMax.value = 20; 
+
+        // ローカルストレージから設定を読み込む
+        function loadSettings() {
+            const savedSushi = localStorage.getItem('sushiPrices');
+            const savedBg = localStorage.getItem('backgroundColors');
+            const savedTextSize = localStorage.getItem('textSize');
+            const savedCustomAmounts = localStorage.getItem('customAmounts');
+            
+            if (savedSushi) {
+                sushiPrices = JSON.parse(savedSushi);
+            }
+            if (savedBg) {
+                backgroundColors = JSON.parse(savedBg);
+            }
+            if (savedTextSize) {
+                textSize = parseFloat(savedTextSize);
+            }
+            if (savedCustomAmounts) {
+                customAmounts = JSON.parse(savedCustomAmounts);
+            }
+            
+            applyBackgroundColor();
         }
-        updateChartAxis();
-        saveSettings();
-    });
 
-    // 言語切替
-    document.getElementById('langSelect').addEventListener('change', (e) => {
-        state.language = e.target.value;
-        applyLanguage();
-        saveSettings();
-    });
+        // 設定を保存
+        function saveSettings() {
+            localStorage.setItem('sushiPrices', JSON.stringify(sushiPrices));
+            localStorage.setItem('backgroundColors', JSON.stringify(backgroundColors));
+            localStorage.setItem('textSize', textSize);
+            localStorage.setItem('customAmounts', JSON.stringify(customAmounts));
+        }
 
-    // 軸更新
-    document.getElementById('btnUpdateAxis').addEventListener('click', () => {
-        updateChartAxis();
-        saveSettings();
-    });
-    document.getElementById('fontSize').addEventListener('change', (e) => {
-        const size = parseInt(e.target.value);
-        applyFontSize(size);
-        saveSettings();
-    });
-    // 測定間隔（間引き）
-    const plotSel = document.getElementById('plotInterval');
-    if (plotSel) {
-        plotSel.addEventListener('change', (e) => {
-            const v = parseInt(e.target.value);
-            state.plotIntervalMs = isNaN(v) ? 60 : v;
-            saveSettings();
+        // DOMが読み込まれたときに実行
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            initializeSushiGrid();
+            initializeSettings();
+            updateCustomAmountsList();
+            setupEventListeners();
+            updateTotal();
         });
-    }
 
-    // 保存
-    document.getElementById('btnSavePNGChart').addEventListener('click', savePNGChart);
-    document.getElementById('btnSavePNGWithFunc').addEventListener('click', savePNGWithFunctions);
-    document.getElementById('btnSaveCSV').addEventListener('click', saveCSV);
-    document.getElementById('btnLoadCSV').addEventListener('click', () => document.getElementById('csvFile').click());
-    document.getElementById('csvFile').addEventListener('change', handleCSVImport);
-
-    // 関数・シフト
-    document.getElementById('btnPlotFunc').addEventListener('click', () => {
-        updateFunctions();
-        saveSettings();
-    });
-    document.getElementById('btnClearFunc').addEventListener('click', () => {
-        ['func1','func2','func3','xmin1','xmax1','xmin2','xmax2','xmin3','xmax3'].forEach(id => document.getElementById(id).value = '');
-        updateFunctions();
-        saveSettings();
-    });
-
-    // 式バリデーション (リアルタイム)
-    ['func1','func2','func3'].forEach(id => {
-        document.getElementById(id).addEventListener('input', () => validateExpression(id));
-    });
-    document.getElementById('btnApplyShift').addEventListener('click', () => {
-        state.shiftX = parseFloat(document.getElementById('shiftX').value) || 0;
-        state.shiftY = parseFloat(document.getElementById('shiftY').value) || 0;
-        redrawAll();
-        saveSettings();
-    });
-    document.getElementById('btnClearShift').addEventListener('click', () => {
-        document.getElementById('shiftX').value = 0;
-        document.getElementById('shiftY').value = 0;
-        state.shiftX = 0;
-        state.shiftY = 0;
-        redrawAll();
-        saveSettings();
-    });
-}
-
-function updateAxisInputsFromUnit() {
-    const u = state.unit;
-    let yMax = 8;
-    let yLabel = 'Distance (m)';
-    
-    if (u === 'cm') { yMax = 800; yLabel = 'Distance (cm)'; }
-    else if (u === 'mm') { yMax = 8000; yLabel = 'Distance (mm)'; }
-    
-    document.getElementById('yMin').value = 0;
-    document.getElementById('yMax').value = yMax;
-    
-    chart.options.scales.y.title.text = yLabel;
-    updateChartAxis();
-}
-
-function updateChartAxis() {
-    const xMin = parseFloat(document.getElementById('xMin').value);
-    const xMax = parseFloat(document.getElementById('xMax').value);
-    const yMin = parseFloat(document.getElementById('yMin').value);
-    const yMax = parseFloat(document.getElementById('yMax').value);
-    const xStep = parseFloat(document.getElementById('xStep').value);
-    const yStep = parseFloat(document.getElementById('yStep').value);
-    
-    chart.options.scales.x.min = xMin;
-    chart.options.scales.x.max = xMax;
-    chart.options.scales.y.min = yMin;
-    chart.options.scales.y.max = yMax;
-
-    chart.options.scales.x.ticks.stepSize = xStep > 0 ? xStep : undefined;
-    chart.options.scales.y.ticks.stepSize = yStep > 0 ? yStep : undefined;
-    
-    updateFunctions(); 
-}
-
-function requestChartUpdate() {
-    state.isChartUpdateRequested = true;
-}
-
-function chartUpdateLoop() {
-    if (state.isChartUpdateRequested) {
-        chart.update('none'); 
-        state.isChartUpdateRequested = false;
-    }
-    requestAnimationFrame(chartUpdateLoop);
-}
-
-// ---------------------------------------------------------
-// 通信・データ処理ロジック
-// ---------------------------------------------------------
-
-async function connectSerial() {
-    if (!('serial' in navigator)) {
-        alert('Web Serial APIがこのブラウザではサポートされていません。Chromeをご利用ください。');
-        return;
-    }
-
-    try {
-        const port = await navigator.serial.requestPort();
-        const baud = parseInt(document.getElementById('baudRate').value);
-        await port.open({ baudRate: baud });
-        state.port = port;
-        setStatus(`接続: Baud ${baud}`);
-        document.getElementById('btnConnect').disabled = true;
-    } catch (e) {
-        console.error(e);
-        setStatus('接続エラー: ' + e.message);
-    }
-}
-
-function startMeasurement() {
-    const isSim = document.getElementById('chkSim').checked;
-    state.keepReading = true;
-    state.measureStartTs = new Date();
-    state.recordStartTs = new Date(Date.now() + state.startDelayMs);
-    
-    state.rawData = [];
-    // スタート時はシフトをリセット
-    state.shiftX = 0; 
-    state.shiftY = 0;
-    document.getElementById('shiftX').value = 0;
-    document.getElementById('shiftY').value = 0;
-
-    if (chart && chart.data && chart.data.datasets && chart.data.datasets[0]) {
-        chart.data.datasets[0].data.length = 0;
-        chart.update('none');
-    }
-    state.lastPlotTs = null;
-    
-    document.getElementById('btnStart').disabled = true;
-    document.getElementById('btnStop').disabled = false;
-    document.getElementById('btnConnect').disabled = true;
-    
-    setStatus(`${ Math.ceil(state.startDelayMs/1000) }s 待機中...`);
-    const ov = document.getElementById('waitingOverlay');
-    if (ov) {
-        ov.textContent = `${Math.ceil(state.startDelayMs/1000)}s`;
-        ov.style.display = 'block';
-    }
-    const initRem = Math.ceil(state.startDelayMs/1000);
-    state.lastCountdownInt = initRem + 1; // 変化検出を強制して初回で鳴らす
-    if (initRem <= 3) {
-        playBeep(); // 初期表示が3のときに即ビープ
-    }
-    // 待機中の独立タイマー（50ms間隔で精度向上）
-    if (state.countdownTimer) { clearInterval(state.countdownTimer); }
-    state.countdownTimer = setInterval(() => {
-        const now = Date.now();
-        const remSec = Math.max(0, (state.recordStartTs - now) / 1000.0);
-        const remInt = Math.ceil(remSec);
-        const ov2 = document.getElementById('waitingOverlay');
-        if (ov2) ov2.textContent = `${remInt}s`;
-        setStatus(`${remInt}s 待機中`);
-        if (state.lastCountdownInt !== remInt) {
-            state.lastCountdownInt = remInt;
-            if (remInt > 0 && remInt <= 3) playBeep();
-            if (remInt === 0) {
-                playBeep(2);
-                clearInterval(state.countdownTimer);
-                state.countdownTimer = null;
-                const ovDone = document.getElementById('waitingOverlay');
-                if (ovDone) ovDone.style.display = 'none';
-            }
-        }
-    }, 50);
-
-    if (isSim) {
-        startSimulation();
-    } else {
-        if (!state.port) {
-            alert('シリアルポートが接続されていません');
-            stopMeasurement();
-            return;
-        }
-        readSerialLoop();
-    }
-}
-
-async function stopMeasurement() {
-    state.keepReading = false;
-    if (state.reader) {
-        try { await state.reader.cancel(); } catch(e){}
-        state.reader = null;
-    }
-    if (state.simIntervalId) {
-        clearInterval(state.simIntervalId);
-        state.simIntervalId = null;
-    }
-    state.isSimulation = false;
-    
-    document.getElementById('btnStart').disabled = false;
-    document.getElementById('btnStop').disabled = true;
-    
-    const ov = document.getElementById('waitingOverlay');
-    if (ov) ov.style.display = 'none';
-    state.lastCountdownInt = null;
-    if (state.countdownTimer) { clearInterval(state.countdownTimer); state.countdownTimer = null; }
-
-    if(state.port && !document.getElementById('chkSim').checked) {
-        setStatus('停止中');
-    } else {
-        setStatus('停止');
-    }
-}
-
-function resetData() {
-    state.rawData = [];
-    state.startTime = null;
-    state.measureStartTs = null;
-    state.recordStartTs = null;
-    state.shiftX = 0; state.shiftY = 0;
-    document.getElementById('shiftX').value = 0;
-    document.getElementById('shiftY').value = 0;
-    chart.data.datasets[0].data.length = 0;
-    state.isSimulation = false;
-    redrawAll();
-    setStatus('データをクリアしました');
-}
-
-function factoryReset() {
-    if(confirm('設定をすべてリセットして再読み込みしますか？')) {
-        localStorage.removeItem('tsd20WebSettings');
-        location.reload();
-    }
-}
-
-async function readSerialLoop() {
-    setStatus('計測中...');
-    while (state.port && state.port.readable && state.keepReading) {
-        state.reader = state.port.readable.getReader();
-        try {
-            while (true) {
-                const { value, done } = await state.reader.read();
-                if (done) break;
-                if (value) {
-                    parseBuffer(value);
+        // イベントリスナー設定
+        function setupEventListeners() {
+            document.getElementById('settingsButton').addEventListener('click', openSettingsModal);
+            document.getElementById('topSettingsButton').addEventListener('click', openSettingsModal);
+            document.getElementById('closeModalButton').addEventListener('click', closeSettingsModal);
+            document.getElementById('cancelSettingsButton').addEventListener('click', closeSettingsModal);
+            document.getElementById('saveSettingsButton').addEventListener('click', applyAndSaveSettings);
+            document.getElementById('resetButton').addEventListener('click', resetCounts);
+            
+            document.getElementById('bgColorInput').addEventListener('input', updateBgColorPreview);
+            document.getElementById('bgColorInput2').addEventListener('input', updateBgColorPreview2);
+            
+            // カスタム金額のイベントリスナー
+            document.getElementById('addCustomAmountButton').addEventListener('click', addCustomAmount);
+            document.getElementById('customAmountInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    addCustomAmount();
                 }
-                if (!state.keepReading) break;
-            }
-        } catch (e) {
-            console.error(e);
-            setStatus('読み取りエラー');
-        } finally {
-            state.reader.releaseLock();
-        }
-    }
-}
-
-function parseBuffer(newData) {
-    const newBuffer = new Uint8Array(state.buffer.length + newData.length);
-    newBuffer.set(state.buffer);
-    newBuffer.set(newData, state.buffer.length);
-    state.buffer = newBuffer;
-
-    const now = new Date();
-    let processedIdx = 0;
-
-    while (state.buffer.length - processedIdx >= 4) {
-        if (state.buffer[processedIdx] !== 0x5C) {
-            processedIdx++;
-            continue;
+            });
         }
 
-        const b1 = state.buffer[processedIdx+1];
-        const b2 = state.buffer[processedIdx+2];
-        const b3 = state.buffer[processedIdx+3];
-        
-        // Checksum: (~(b1 + b2)) & 0xFF
-        const cs = (~(b1 + b2)) & 0xFF;
-        
-        if (cs === b3) {
-            const dist_mm = b1 | (b2 << 8);
-            if (dist_mm < 50000) { 
-                addDataPoint(now, dist_mm);
-            }
-            processedIdx += 4;
-        } else {
-            processedIdx++;
+        // 背景色プレビュー更新
+        function updateBgColorPreview() {
+            const color = document.getElementById('bgColorInput').value;
+            document.getElementById('bgColorPreview').style.background = color;
         }
-    }
 
-    if (processedIdx > 0) {
-        state.buffer = state.buffer.slice(processedIdx);
-    }
-}
-
-function startSimulation() {
-    setStatus('シミュレーション中...');
-    state.isSimulation = true;
-    state.simT0 = Date.now();
-    // 最初のデータを少し遅延して投入（オーバーレイ初期表示の直後でも視認性を上げる）
-    setTimeout(() => {
-        const now = new Date();
-        const t = (Date.now() - state.simT0) / 1000.0;
-        let dist_m = 1.5 + 0.5 * Math.sin(t) + 0.05 * (Math.random() - 0.5);
-        let dist_mm = Math.max(50.0, dist_m * 1000.0);
-        addDataPoint(now, dist_mm);
-    }, 100);
-
-    // 描画・記録の間引きに合わせたインターバル（最低でもplotIntervalMs相当）
-    const simIntervalMs = Math.max(30, state.plotIntervalMs);
-    state.simIntervalId = setInterval(() => {
-        const now = new Date();
-        const t = (Date.now() - state.simT0) / 1000.0;
-        
-        // 疑似データ: 1.5mを中心に変動
-        let dist_m = 1.5 + 0.5 * Math.sin(t) + 0.05 * (Math.random() - 0.5);
-        let dist_mm = Math.max(50.0, dist_m * 1000.0);
-        
-        addDataPoint(now, dist_mm);
-
-    }, simIntervalMs); 
-}
-
-function addDataPoint(timestamp, dist_mm) {
-    // 待機期間中は追加しない（ビープや表示は独立タイマーが担当）
-    if (timestamp < state.recordStartTs) {
-        return;
-    }
-    
-    const ovAfter = document.getElementById('waitingOverlay');
-    if (ovAfter) ovAfter.style.display = 'none';
-
-    const elapsed = (timestamp - state.recordStartTs) / 1000.0;
-    
-    if (state.duration > 0 && elapsed >= state.duration) {
-        stopMeasurement();
-        setStatus(`完了: ${state.duration}秒到達`);
-        return;
-    }
-    
-    const nowMs = timestamp.getTime();
-    const lastMs = state.lastPlotTs ?? 0;
-    // 測定間隔で読み取りを間引く（0は間引き無し）
-    if (state.plotIntervalMs > 0 && (nowMs - lastMs) < state.plotIntervalMs) {
-        return;
-    }
-
-    // データ追加（間引き後に記録）
-    state.rawData.push({ t: elapsed, d: dist_mm });
-
-    // 画面更新用のデータ生成
-    const x = elapsed - state.shiftX;
-    let y = dist_mm;
-    if (state.unit === 'm') y /= 1000.0; else if (state.unit === 'cm') y /= 10.0;
-    y -= state.shiftY;
-
-    {
-        chart.data.datasets[0].data.push({x, y});
-        state.lastPlotTs = nowMs;
-        chart.update('none');
-        
-        // 無限モード時のX軸スクロール
-        if (state.duration === 0) {
-            if (x > chart.options.scales.x.max) {
-                const range = chart.options.scales.x.max - chart.options.scales.x.min;
-                chart.options.scales.x.max = x;
-                chart.options.scales.x.min = x - range;
-            }
+        function updateBgColorPreview2() {
+            const color = document.getElementById('bgColorInput2').value;
+            document.getElementById('bgColorPreview2').style.background = color;
         }
-    }
-}
 
-function redrawAll() {
-    if (!chart) return;
-    const rawDs = chart.data.datasets[0].data;
-    rawDs.length = 0;
-
-    for (const p of state.rawData) {
-        const x = p.t - state.shiftX;
-        let y = p.d;
-        if (state.unit === 'm') y /= 1000.0;
-        else if (state.unit === 'cm') y /= 10.0;
-        y -= state.shiftY;
-        rawDs.push({x, y});
-    }
-    requestChartUpdate();
-}
-
-function updateFunctions() {
-    const inputs = [
-        { expr: document.getElementById('func1').value, min: document.getElementById('xmin1').value, max: document.getElementById('xmax1').value },
-        { expr: document.getElementById('func2').value, min: document.getElementById('xmin2').value, max: document.getElementById('xmax2').value },
-        { expr: document.getElementById('func3').value, min: document.getElementById('xmin3').value, max: document.getElementById('xmax3').value }
-    ];
-
-    const xMinChart = chart.options.scales.x.min;
-    const xMaxChart = chart.options.scales.x.max;
-
-    inputs.forEach((inp, idx) => {
-        const datasetIndex = idx + 1;
-        const dataArr = [];
-        
-        if (inp.expr.trim()) {
-            try {
-                let exprStr = preprocessExpression(inp.expr);
-                const compiled = math.compile(exprStr);
+        // お寿司グリッドを初期化
+        function initializeSushiGrid() {
+            const grid = document.getElementById('sushiGrid');
+            grid.innerHTML = '';
+            
+            sushiPrices.forEach((sushi, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'sushi-item';
                 
-                let start = xMinChart;
-                let end = xMaxChart;
-                if (inp.min !== '') start = parseFloat(inp.min);
-                if (inp.max !== '') end = parseFloat(inp.max);
+                const containerDiv = document.createElement('div');
+                containerDiv.className = 'plate-container';
+                containerDiv.id = `plate-${index}`;
                 
-                if (start < end) {
-                    const steps = 100;
-                    const stepVal = (end - start) / steps;
-                    for (let i = 0; i <= steps; i++) {
-                        const xVal = start + stepVal * i;
-                        try {
-                            const yVal = compiled.evaluate({x: xVal, t: xVal});
-                            dataArr.push({x: xVal, y: yVal});
-                        } catch(e) {}
+                const svg = createPlateSVG(sushi.color);
+                containerDiv.innerHTML = svg;
+                
+                const countDisplay = document.createElement('div');
+                countDisplay.className = 'count-display';
+                countDisplay.id = `count-${index}`;
+                countDisplay.textContent = '0';
+                countDisplay.style.color = sushi.textColor;
+                countDisplay.style.fontSize = `${textSize}em`;
+                containerDiv.appendChild(countDisplay);
+                
+                containerDiv.addEventListener('click', () => {
+                    counts[index]++;
+                    updateDisplay(index);
+                    updateTotal();
+                });
+                
+                itemDiv.appendChild(containerDiv);
+                
+                const priceLabel = document.createElement('div');
+                priceLabel.className = 'price-label';
+                priceLabel.textContent = sushi.name;
+                itemDiv.appendChild(priceLabel);
+                
+                const priceYen = document.createElement('div');
+                priceYen.className = 'price-yen';
+                priceYen.textContent = `¥${sushi.price}`;
+                itemDiv.appendChild(priceYen);
+                
+                // マイナスボタンを追加
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'button-container';
+                
+                const minusButton = document.createElement('button');
+                minusButton.className = 'minus-button';
+                minusButton.textContent = '−';
+                minusButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (counts[index] > 0) {
+                        counts[index]--;
+                        updateDisplay(index);
+                        updateTotal();
                     }
-                }
-                document.getElementById(`func${idx+1}`).classList.remove('error');
-            } catch (e) {
-                console.warn(`Func ${idx+1} error:`, e);
-                document.getElementById(`func${idx+1}`).classList.add('error');
+                });
+                buttonContainer.appendChild(minusButton);
+                itemDiv.appendChild(buttonContainer);
+                
+                grid.appendChild(itemDiv);
+            });
+        }
+
+        // 設定パネルを初期化
+        function initializeSettings() {
+            const settingsDiv = document.getElementById('sushiSettings');
+            settingsDiv.innerHTML = '';
+            
+            sushiPrices.forEach((sushi, index) => {
+                const settingItem = document.createElement('div');
+                settingItem.className = 'sushi-setting-item';
+                settingItem.innerHTML = `
+                    <div style="font-weight: bold; color: #333;">品目 ${index + 1}</div>
+                    <div class="setting-input-group">
+                        <label>名前</label>
+                        <input type="text" class="setting-name" data-index="${index}" value="${sushi.name}">
+                    </div>
+                    <div class="setting-input-group">
+                        <label>価格（円）</label>
+                        <input type="number" class="setting-price" data-index="${index}" value="${sushi.price}" min="0">
+                    </div>
+                    <div class="setting-input-group">
+                        <label>お皿の色</label>
+                        <input type="color" class="setting-color" data-index="${index}" value="${sushi.color}">
+                    </div>
+                    <div class="setting-input-group">
+                        <label>文字の色</label>
+                        <input type="color" class="setting-text-color" data-index="${index}" value="${sushi.textColor}">
+                    </div>
+                `;
+                settingsDiv.appendChild(settingItem);
+            });
+        }
+
+        // 設定モーダルを開く
+        function openSettingsModal() {
+            document.getElementById('bgColorInput').value = backgroundColors.color1;
+            document.getElementById('bgColorInput2').value = backgroundColors.color2;
+            document.getElementById('bgColorPreview').style.background = backgroundColors.color1;
+            document.getElementById('bgColorPreview2').style.background = backgroundColors.color2;
+            document.getElementById('textSizeInput').value = textSize;
+            
+            document.getElementById('settingsModal').classList.add('active');
+        }
+
+        // 設定モーダルを閉じる
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('active');
+        }
+
+        // 設定を適用して保存
+        function applyAndSaveSettings() {
+            // お寿司設定を取得
+            document.querySelectorAll('.setting-name').forEach(input => {
+                const index = parseInt(input.dataset.index);
+                sushiPrices[index].name = input.value || `品目${index + 1}`;
+            });
+
+            document.querySelectorAll('.setting-price').forEach(input => {
+                const index = parseInt(input.dataset.index);
+                sushiPrices[index].price = parseInt(input.value) || 0;
+            });
+
+            document.querySelectorAll('.setting-color').forEach(input => {
+                const index = parseInt(input.dataset.index);
+                sushiPrices[index].color = input.value;
+            });
+
+            document.querySelectorAll('.setting-text-color').forEach(input => {
+                const index = parseInt(input.dataset.index);
+                sushiPrices[index].textColor = input.value;
+            });
+
+            // 背景色と文字サイズ設定を取得
+            backgroundColors.color1 = document.getElementById('bgColorInput').value;
+            backgroundColors.color2 = document.getElementById('bgColorInput2').value;
+            textSize = parseFloat(document.getElementById('textSizeInput').value);
+
+            // 設定を保存
+            saveSettings();
+
+            // UIを更新
+            applyBackgroundColor();
+            initializeSushiGrid();
+            updateTotal();
+
+            closeSettingsModal();
+        }
+
+        // 背景色を適用
+        function applyBackgroundColor() {
+            document.body.style.background = `linear-gradient(135deg, ${backgroundColors.color1} 0%, ${backgroundColors.color2} 100%)`;
+        }
+
+        // カウント数をリセット
+        function resetCounts() {
+            sushiPrices.forEach((_, index) => {
+                counts[index] = 0;
+                updateDisplay(index);
+            });
+            updateTotal();
+        }
+
+        // カスタム金額を追加
+        function addCustomAmount() {
+            const input = document.getElementById('customAmountInput');
+            const amount = parseInt(input.value);
+            
+            if (isNaN(amount) || amount <= 0) {
+                alert('正の数値を入力してください');
+                return;
             }
-        } else {
-            document.getElementById(`func${idx+1}`).classList.remove('error');
-        }
-        chart.data.datasets[datasetIndex].data = dataArr;
-    });
-    
-    requestChartUpdate();
-}
-
-function preprocessExpression(expr) {
-    return expr.replace(/^y\s*=\s*/i, '');
-}
-
-function validateExpression(id) {
-    const el = document.getElementById(id);
-    const expr = el.value.trim();
-    if (!expr) { el.classList.remove('error'); return; }
-    try {
-        const compiled = math.compile(preprocessExpression(expr));
-        compiled.evaluate({x:1,t:1});
-        el.classList.remove('error');
-    } catch(e){
-        el.classList.add('error');
-    }
-}
-
-// ---------------------------------------------------------
-// 保存・ロード・言語
-// ---------------------------------------------------------
-
-const i18nDict = {
-    ja: {
-        start:'開始', stop:'停止', dataClear:'データクリア', factoryReset:'リセット', savePNGChart:'📷 PNG保存(グラフ)', savePNGWithFunc:'📷 PNG保存(グラフ+式)', saveCSV:'💾 CSV保存', updateAxis:'範囲更新', fontSize:'文字サイズ', language:'言語', funcUpdate:'関数を更新', funcClear:'クリア', shiftTitle:'点群の平行移動', functionsTitle:'式の描画 (例: y = 2*x + 1)',
-        apply:'適用', plotInterval:'測定間隔(ms)'
-    },
-    en: {
-        start:'Start', stop:'Stop', dataClear:'Clear Data', factoryReset:'Factory Reset', savePNGChart:'📷 Save PNG (Chart)', savePNGWithFunc:'📷 Save PNG (Chart + Functions)', saveCSV:'💾 Save CSV', updateAxis:'Update Range', fontSize:'Font Size', language:'Language', funcUpdate:'Update Functions', funcClear:'Clear', shiftTitle:'Point Shift', functionsTitle:'Function Plot (e.g. y = 2*x + 1)',
-        apply:'Apply', plotInterval:'Sampling Interval (ms)'
-    }
-};
-
-function applyLanguage() {
-    try {
-        const d = i18nDict[state.language] || i18nDict.ja;
-        const setTxt = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-        
-        setTxt('btnStart', d.start);
-        setTxt('btnStop', d.stop);
-        setTxt('btnReset', d.dataClear);
-        setTxt('btnFactoryReset', d.factoryReset);
-        setTxt('btnSavePNGChart', d.savePNGChart);
-        setTxt('btnSavePNGWithFunc', d.savePNGWithFunc);
-        setTxt('btnSaveCSV', d.saveCSV);
-        setTxt('btnUpdateAxis', d.updateAxis);
-        const lbl = document.getElementById('lblPlotInterval'); if (lbl) lbl.textContent = d.plotInterval;
-        setTxt('btnPlotFunc', d.funcUpdate);
-        setTxt('btnClearFunc', d.funcClear);
-        setTxt('shiftTitle', d.shiftTitle);
-        setTxt('functionsTitle', d.functionsTitle);
-        setTxt('btnApplyShift', d.apply);
-        setTxt('btnClearShift', d.funcClear);
-    } catch(e) { console.error(e); }
-}
-
-function setStatus(msg) {
-    const el = document.getElementById('statusBar');
-    if (el) el.textContent = msg;
-}
-
-function savePNGChart() {
-    const canvas = document.getElementById('myChart');
-    const w = canvas.width;
-    const h = canvas.height;
-    const off = document.createElement('canvas');
-    off.width = w; off.height = h;
-    const ctx = off.getContext('2d');
-    // 白背景を塗る
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, w, h);
-    // 元キャンバスを合成
-    ctx.drawImage(canvas, 0, 0);
-
-    const link = document.createElement('a');
-    link.download = `plot_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
-    link.href = off.toDataURL('image/png');
-    link.click();
-}
-
-function savePNGWithFunctions() {
-    const canvas = document.getElementById('myChart');
-    const w = canvas.width;
-    const h = canvas.height;
-
-    const rangeLabel = (state?.language === 'en') ? 'Range' : '範囲';
-    const exprs = [
-        {
-            idx: 1,
-            label: '式1',
-            color: 'orange',
-            value: (document.getElementById('func1')?.value || '').trim(),
-            min: (document.getElementById('xmin1')?.value || ''),
-            max: (document.getElementById('xmax1')?.value || '')
-        },
-        {
-            idx: 2,
-            label: '式2',
-            color: 'green',
-            value: (document.getElementById('func2')?.value || '').trim(),
-            min: (document.getElementById('xmin2')?.value || ''),
-            max: (document.getElementById('xmax2')?.value || '')
-        },
-        {
-            idx: 3,
-            label: '式3',
-            color: 'red',
-            value: (document.getElementById('func3')?.value || '').trim(),
-            min: (document.getElementById('xmin3')?.value || ''),
-            max: (document.getElementById('xmax3')?.value || '')
-        }
-    ]
-    .filter(e => e.value)
-    .map(e => {
-        const hasRange = (e.min !== '') && (e.max !== '');
-        const rmin = hasRange ? parseFloat(e.min) : null;
-        const rmax = hasRange ? parseFloat(e.max) : null;
-        // 入力値から「y = 」を削除
-        const cleanValue = preprocessExpression(e.value);
-        return { ...e, value: cleanValue, hasRange, rangeMin: rmin, rangeMax: rmax, rangeLabel };
-    });
-
-    const fontSize = parseInt(document.getElementById('fontSize')?.value || '16');
-    const padding = 20;
-    const lineH = fontSize + 12;
-    const markerSize = 12;
-    const markerMargin = 8;
-    
-    // 下部の枠に必要な追加高さを計算
-    // 式の行数 + パディング
-    const extraH = exprs.length > 0 ? exprs.length * lineH + padding * 2 : 0;
-
-    const off = document.createElement('canvas');
-    off.width = w;
-    off.height = h + extraH;
-    const ctx = off.getContext('2d');
-
-    // 背景（白で統一）
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, off.width, off.height);
-
-    // グラフを描画
-    ctx.drawImage(canvas, 0, 0);
-
-    // 下部に式リストセクション（式が存在する場合）
-    if (exprs.length > 0) {
-        const frameX = padding;
-        const frameY = h + padding;
-        const frameW = w - padding * 2;
-        const frameH = extraH - padding * 2;
-
-        // 背景（薄いグレー）
-        ctx.fillStyle = '#f9f9f9';
-        ctx.fillRect(frameX, frameY, frameW, frameH);
-
-        // フレーム枠
-        ctx.strokeStyle = '#cccccc';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(frameX, frameY, frameW, frameH);
-
-        // 式リスト
-        ctx.font = `${fontSize}px sans-serif`;
-        let contentY = frameY + padding / 2;
-        
-        exprs.forEach((e, idx) => {
-            const y = contentY + idx * lineH;
             
-            // 色マーカー（正方形）
-            ctx.fillStyle = e.color;
-            ctx.fillRect(frameX + 12, y + 2, markerSize, markerSize);
+            customAmounts.push(amount);
+            input.value = '';
+            updateCustomAmountsList();
+            updateTotal();
+            saveSettings();
+        }
+
+        // カスタム金額リストを更新
+        function updateCustomAmountsList() {
+            const list = document.getElementById('customAmountsList');
+            list.innerHTML = '';
             
-            // テキスト（*を×に、/を÷に置換）
-            ctx.fillStyle = '#333333';
-            ctx.textBaseline = 'top';
-            const displayValue = e.value.replace(/\*/g, '×').replace(/\//g, '÷');
-            const baseText = `${e.label}: y = ${displayValue}`;
-            const text = e.hasRange 
-                ? `${baseText}  [${e.rangeLabel}: ${e.rangeMin} ～ ${e.rangeMax}]` 
-                : baseText;
-            ctx.fillText(text, frameX + 12 + markerSize + markerMargin, y);
+            customAmounts.forEach((amount, index) => {
+                const item = document.createElement('div');
+                item.className = 'custom-amount-item';
+                item.innerHTML = `
+                    <span class="custom-amount-item-price">¥${amount.toLocaleString()}</span>
+                    <button class="custom-amount-item-delete">×</button>
+                `;
+                
+                item.querySelector('.custom-amount-item-delete').addEventListener('click', () => {
+                    customAmounts.splice(index, 1);
+                    updateCustomAmountsList();
+                    updateTotal();
+                    saveSettings();
+                });
+                
+                list.appendChild(item);
+            });
+        }
+
+        // お皿のSVGを作成
+        function createPlateSVG(color) {
+            return `
+                <svg class="plate-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="60" cy="50" rx="50" ry="40" fill="${color}" stroke="#ddd" stroke-width="2"/>
+                    <ellipse cx="60" cy="45" rx="48" ry="35" fill="none" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="#ccc" stroke-width="1" opacity="0.5"/>
+                </svg>
+            `;
+        }
+
+        // 表示を更新
+        function updateDisplay(index) {
+            const countDisplay = document.getElementById(`count-${index}`);
+            countDisplay.textContent = counts[index];
+            
+            countDisplay.style.animation = 'none';
+            setTimeout(() => {
+                countDisplay.style.animation = 'scale-pop 0.3s ease';
+            }, 10);
+        }
+
+        // 合計金額を更新
+        function updateTotal() {
+            let total = 0;
+            sushiPrices.forEach((sushi, index) => {
+                total += sushi.price * counts[index];
+            });
+            
+            // カスタム金額を追加
+            customAmounts.forEach((amount) => {
+                total += amount;
+            });
+            
+            const totalAmount = document.getElementById('totalAmount');
+            totalAmount.textContent = `¥${total.toLocaleString()}`;
+        }
+
+        // モーダル外をクリックで閉じる
+        document.getElementById('settingsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'settingsModal') {
+                closeSettingsModal();
+            }
         });
-    }
-
-    const link = document.createElement('a');
-    link.download = `plot_with_functions_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
-    link.href = off.toDataURL('image/png');
-    link.click();
-}
-
-function saveCSV() {
-    // rawDataをベースに、シフトと単位変換を適用して出力
-    const u = state.unit;
-    let header = `Time(s),Distance(${u})\n`;
-    let body = '';
-    
-    // 描画されているデータを取得（シフト反映済み）
-    // ただし描画間引きされている可能性があるため、RawDataから再計算する
-    for (let i = 0; i < state.rawData.length; i++) {
-        const p = state.rawData[i];
-        const t = (p.t - state.shiftX).toFixed(4);
-        let d = p.d;
-        
-        if (u === 'm') d /= 1000.0;
-        else if (u === 'cm') d /= 10.0;
-        d -= state.shiftY;
-        
-        body += `${t},${d.toFixed(4)}\n`;
-    }
-    
-    const blob = new Blob([header + body], { type: 'text/csv' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `data_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`;
-    link.click();
-}
-
-// --------------------------------------------
-// CSV読み込み（Time(s),Distance(<unit>) 形式）
-// --------------------------------------------
-function handleCSVImport(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-        try {
-            importCSV(reader.result);
-            setStatus('CSVを読み込みました');
-        } catch(err) {
-            console.error(err);
-            alert('CSVの読み込みに失敗しました');
-        } finally {
-            e.target.value = '';
-        }
-    };
-    reader.readAsText(file, 'utf-8');
-}
-
-function importCSV(text) {
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length < 2) throw new Error('CSVが空です');
-    // 1行目はヘッダ: Time(s),Distance(<unit>)
-    const header = lines[0];
-    const m = header.match(/Distance\((m|cm|mm)\)/i);
-    const csvUnit = m ? m[1].toLowerCase() : null;
-    // 本体行を解析
-    const points = [];
-    for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].trim();
-        if (!row) continue;
-        const cols = row.split(',');
-        if (cols.length < 2) continue;
-        const t = parseFloat(cols[0]);
-        const dUnit = parseFloat(cols[1]);
-        if (!isFinite(t) || !isFinite(dUnit)) continue;
-        // CSVはシフト・単位反映後の値なので、mmへ戻して保存
-        let d_mm;
-        if (csvUnit === 'm') d_mm = dUnit * 1000.0;
-        else if (csvUnit === 'cm') d_mm = dUnit * 10.0;
-        else if (csvUnit === 'mm') d_mm = dUnit;
-        else {
-            // ヘッダに単位がない場合は現在のUI単位として扱う
-            if (state && state.unit === 'm') d_mm = dUnit * 1000.0;
-            else if (state.unit === 'cm') d_mm = dUnit * 10.0;
-            else d_mm = dUnit;
-        }
-        // CSVのtはシフト後の値なので、シフトを逆算して元の時刻を推定
-        const t_raw = t + (state.shiftX || 0);
-        points.push({ t: t_raw, d: d_mm });
-    }
-    // 既存データを置き換え
-    state.rawData = points;
-    // 計測開始・記録開始時刻を現在に再設定（リアルタイム連携はせず静的表示）
-    state.measureStartTs = new Date();
-    state.recordStartTs = new Date();
-    // グラフへ反映
-    redrawAll();
-}
-
-function saveSettings() {
-    const settings = {
-        baud: document.getElementById('baudRate').value,
-        unit: state.unit,
-        duration: state.duration,
-        xMin: document.getElementById('xMin').value,
-        xMax: document.getElementById('xMax').value,
-        xStep: document.getElementById('xStep').value,
-        yMin: document.getElementById('yMin').value,
-        yMax: document.getElementById('yMax').value,
-        yStep: document.getElementById('yStep').value,
-        fontSize: document.getElementById('fontSize').value,
-        plotInterval: document.getElementById('plotInterval')?.value,
-        language: state.language,
-        func1: document.getElementById('func1').value,
-        func2: document.getElementById('func2').value,
-        func3: document.getElementById('func3').value,
-        shiftX: document.getElementById('shiftX').value,
-        shiftY: document.getElementById('shiftY').value,
-    };
-    localStorage.setItem('tsd20WebSettings', JSON.stringify(settings));
-}
-
-// --------------------------------------------
-// ビープ音（Web Audio API）
-// --------------------------------------------
-function playBeep(mode = 1) {
-    try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        const ctx = playBeep._ctx || new AudioCtx();
-        playBeep._ctx = ctx;
-        if (ctx.state === 'suspended') {
-            ctx.resume().catch(()=>{});
-        }
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle'; // 少し柔らかい音色
-        // モードで周波数と長さを間延び気味に調整
-        const freq = mode === 2 ? 600 : 450; // 全体をさらに低めに設定
-        const dur = mode === 2 ? 0.5 : 0.3;  // より長めの持続
-        osc.frequency.value = freq;
-        // エンベロープ（フェードイン/アウト）で間延びした印象を強調
-        const now = ctx.currentTime;
-        gain.gain.setValueAtTime(0.0, now);
-        gain.gain.linearRampToValueAtTime(0.15, now + 0.05);
-        gain.gain.setValueAtTime(0.15, now + Math.max(0, dur - 0.1));
-        gain.gain.linearRampToValueAtTime(0.0, now + dur);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + dur);
-    } catch(e) {
-        // 失敗しても致命的ではないのでログのみ
-        console.warn('Beep failed:', e);
-    }
-}
-
-function loadSettings() {
-    const json = localStorage.getItem('tsd20WebSettings');
-    if (!json) return;
-    try {
-        const s = JSON.parse(json);
-        if(s.baud) document.getElementById('baudRate').value = s.baud;
-        if(s.unit) {
-            state.unit = s.unit;
-            document.querySelector(`input[name="unit"][value="${s.unit}"]`).checked = true;
-        }
-        if(s.duration !== undefined) {
-            state.duration = parseInt(s.duration);
-            document.getElementById('duration').value = s.duration;
-        }
-        if(s.xMin) document.getElementById('xMin').value = s.xMin;
-        if(s.xMax) document.getElementById('xMax').value = s.xMax;
-        if(s.xStep) document.getElementById('xStep').value = s.xStep;
-        if(s.yMin) document.getElementById('yMin').value = s.yMin;
-        if(s.yMax) document.getElementById('yMax').value = s.yMax;
-        if(s.yStep) document.getElementById('yStep').value = s.yStep;
-        if(s.fontSize) {
-            document.getElementById('fontSize').value = s.fontSize;
-            applyFontSize(parseInt(s.fontSize));
-        }
-        if(s.plotInterval !== undefined) {
-            const sel = document.getElementById('plotInterval');
-            if (sel) sel.value = String(s.plotInterval);
-            const v = parseInt(s.plotInterval);
-            state.plotIntervalMs = isNaN(v) ? state.plotIntervalMs : v;
-        } else {
-            // 未保存の場合はセレクタに現在値を反映
-            const sel = document.getElementById('plotInterval');
-            if (sel) sel.value = String(state.plotIntervalMs);
-        }
-        if(s.language) {
-            state.language = s.language;
-            document.getElementById('langSelect').value = s.language;
-            applyLanguage();
-        }
-        if(s.func1) document.getElementById('func1').value = s.func1;
-        if(s.func2) document.getElementById('func2').value = s.func2;
-        if(s.func3) document.getElementById('func3').value = s.func3;
-        if(s.shiftX) {
-            document.getElementById('shiftX').value = s.shiftX;
-            state.shiftX = parseFloat(s.shiftX);
-        }
-        if(s.shiftY) {
-            document.getElementById('shiftY').value = s.shiftY;
-            state.shiftY = parseFloat(s.shiftY);
-        }
-        
-        updateChartAxis(); // 反映
-    } catch(e) {
-        console.error('Settings load error', e);
-    }
-}
-</script>
+    </script>
 </body>
 </html>
