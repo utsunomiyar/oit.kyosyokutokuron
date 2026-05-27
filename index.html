@@ -285,15 +285,15 @@
                     <div id="funcList">
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:orange; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式1:</span> <input type="text" id="func1" class="w-large" placeholder="例: y=0.5*x"></div>
-                            <div>範囲: <input type="number" id="xmin1" class="w-small" placeholder="min"> ～ <input type="number" id="xmax1" class="w-small" placeholder="max"></div>
+                            <div>変域: <input type="number" id="xmin1" class="w-small" placeholder="min"> <select id="xminOp1" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> x <select id="xmaxOp1" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> <input type="number" id="xmax1" class="w-small" placeholder="max"></div>
                         </div>
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:green; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式2:</span> <input type="text" id="func2" class="w-large"></div>
-                            <div>範囲: <input type="number" id="xmin2" class="w-small"> ～ <input type="number" id="xmax2" class="w-small"></div>
+                            <div>変域: <input type="number" id="xmin2" class="w-small"> <select id="xminOp2" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> x <select id="xmaxOp2" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> <input type="number" id="xmax2" class="w-small"></div>
                         </div>
                         <div class="row" style="gap:8px; flex-direction: column; align-items: flex-start;">
                             <div style="display: flex; gap: 8px; align-items: center; width: 100%;"><span style="color:red; flex-shrink: 0;">■</span> <span style="flex-shrink: 0;">式3:</span> <input type="text" id="func3" class="w-large"></div>
-                            <div>範囲: <input type="number" id="xmin3" class="w-small"> ～ <input type="number" id="xmax3" class="w-small"></div>
+                            <div>変域: <input type="number" id="xmin3" class="w-small"> <select id="xminOp3" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> x <select id="xmaxOp3" class="w-small"><option value="<=" selected>≤</option><option value="<">&lt;</option></select> <input type="number" id="xmax3" class="w-small"></div>
                         </div>
                     </div>
                     <div class="row">
@@ -1131,7 +1131,7 @@ function savePNGWithFunctions() {
     const w = canvas.width;
     const h = canvas.height;
 
-    const rangeLabel = (state?.language === 'en') ? 'Range' : '範囲';
+    const rangeLabel = (state?.language === 'en') ? 'Range' : '変域';
     const exprs = [
         {
             idx: 1,
@@ -1139,6 +1139,8 @@ function savePNGWithFunctions() {
             color: 'orange',
             value: (document.getElementById('func1')?.value || '').trim(),
             min: (document.getElementById('xmin1')?.value || ''),
+            minOp: (document.getElementById('xminOp1')?.value || '<='),
+            maxOp: (document.getElementById('xmaxOp1')?.value || '<='),
             max: (document.getElementById('xmax1')?.value || '')
         },
         {
@@ -1147,6 +1149,8 @@ function savePNGWithFunctions() {
             color: 'green',
             value: (document.getElementById('func2')?.value || '').trim(),
             min: (document.getElementById('xmin2')?.value || ''),
+            minOp: (document.getElementById('xminOp2')?.value || '<='),
+            maxOp: (document.getElementById('xmaxOp2')?.value || '<='),
             max: (document.getElementById('xmax2')?.value || '')
         },
         {
@@ -1155,17 +1159,33 @@ function savePNGWithFunctions() {
             color: 'red',
             value: (document.getElementById('func3')?.value || '').trim(),
             min: (document.getElementById('xmin3')?.value || ''),
+            minOp: (document.getElementById('xminOp3')?.value || '<='),
+            maxOp: (document.getElementById('xmaxOp3')?.value || '<='),
             max: (document.getElementById('xmax3')?.value || '')
         }
     ]
     .filter(e => e.value)
     .map(e => {
-        const hasRange = (e.min !== '') && (e.max !== '');
-        const rmin = hasRange ? parseFloat(e.min) : null;
-        const rmax = hasRange ? parseFloat(e.max) : null;
+        const hasMin = e.min.trim() !== '';
+        const hasMax = e.max.trim() !== '';
+        const rmin = hasMin ? parseFloat(e.min) : null;
+        const rmax = hasMax ? parseFloat(e.max) : null;
+        const minOp = e.minOp || '<=';
+        const maxOp = e.maxOp || '<=';
+        const opSymbols = { '<=': '≦', '<': '<', '>=': '≧', '>': '>' };
+        const minOpLabel = opSymbols[minOp] || minOp;
+        const maxOpLabel = opSymbols[maxOp] || maxOp;
+        let rangeText = '';
+        if (hasMin && hasMax) {
+            rangeText = `${rangeLabel}: ${rmin} ${minOpLabel} x ${maxOpLabel} ${rmax}`;
+        } else if (hasMin) {
+            rangeText = `${rangeLabel}: ${rmin} ${minOpLabel} x`;
+        } else if (hasMax) {
+            rangeText = `${rangeLabel}: x ${maxOpLabel} ${rmax}`;
+        }
         // 入力値から「y = 」を削除
         const cleanValue = preprocessExpression(e.value);
-        return { ...e, value: cleanValue, hasRange, rangeMin: rmin, rangeMax: rmax, rangeLabel };
+        return { ...e, value: cleanValue, hasRange: hasMin || hasMax, rangeMin: rmin, rangeMax: rmax, rangeLabel, rangeText };
     });
 
     const fontSize = parseInt(document.getElementById('fontSize')?.value || '16');
@@ -1206,8 +1226,20 @@ function savePNGWithFunctions() {
         ctx.lineWidth = 2;
         ctx.strokeRect(frameX, frameY, frameW, frameH);
 
+        const drawMathText = (ctx, text, x, y, fontSize) => {
+            const normalFont = `${fontSize}px sans-serif`;
+            const italicFont = `italic ${fontSize}px sans-serif`;
+            const parts = text.match(/[A-Za-z]+|[^A-Za-z]+/g) || [text];
+            let curX = x;
+            parts.forEach(part => {
+                ctx.font = /^[A-Za-z]+$/.test(part) ? italicFont : normalFont;
+                ctx.fillText(part, curX, y);
+                curX += ctx.measureText(part).width;
+            });
+            return curX - x;
+        };
+
         // 式リスト
-        ctx.font = `${fontSize}px sans-serif`;
         let contentY = frameY + padding / 2;
         
         exprs.forEach((e, idx) => {
@@ -1221,11 +1253,21 @@ function savePNGWithFunctions() {
             ctx.fillStyle = '#333333';
             ctx.textBaseline = 'top';
             const displayValue = e.value.replace(/\*/g, '×').replace(/\//g, '÷');
-            const baseText = `${e.label}: y = ${displayValue}`;
-            const text = e.hasRange 
-                ? `${baseText}  [${e.rangeLabel}: ${e.rangeMin} ～ ${e.rangeMax}]` 
-                : baseText;
-            ctx.fillText(text, frameX + 12 + markerSize + markerMargin, y);
+            const labelText = `${e.label}: `;
+            const formulaText = `y = ${displayValue}`;
+            const rangeText = e.rangeText ? `  ${e.rangeText}` : '';
+            const startX = frameX + 12 + markerSize + markerMargin;
+
+            ctx.font = `${fontSize}px sans-serif`;
+            ctx.fillText(labelText, startX, y);
+            const labelWidth = ctx.measureText(labelText).width;
+
+            const formulaWidth = drawMathText(ctx, formulaText, startX + labelWidth, y, fontSize);
+
+            if (rangeText) {
+                ctx.font = `${fontSize}px sans-serif`;
+                ctx.fillText(rangeText, startX + labelWidth + formulaWidth, y);
+            }
         });
     }
 
@@ -1341,6 +1383,12 @@ function saveSettings() {
         func1: document.getElementById('func1').value,
         func2: document.getElementById('func2').value,
         func3: document.getElementById('func3').value,
+        xminOp1: document.getElementById('xminOp1')?.value,
+        xmaxOp1: document.getElementById('xmaxOp1')?.value,
+        xminOp2: document.getElementById('xminOp2')?.value,
+        xmaxOp2: document.getElementById('xmaxOp2')?.value,
+        xminOp3: document.getElementById('xminOp3')?.value,
+        xmaxOp3: document.getElementById('xmaxOp3')?.value,
         shiftX: document.getElementById('shiftX').value,
         shiftY: document.getElementById('shiftY').value,
     };
@@ -1423,6 +1471,12 @@ function loadSettings() {
         if(s.func1) document.getElementById('func1').value = s.func1;
         if(s.func2) document.getElementById('func2').value = s.func2;
         if(s.func3) document.getElementById('func3').value = s.func3;
+        if(s.xminOp1) document.getElementById('xminOp1').value = s.xminOp1;
+        if(s.xmaxOp1) document.getElementById('xmaxOp1').value = s.xmaxOp1;
+        if(s.xminOp2) document.getElementById('xminOp2').value = s.xminOp2;
+        if(s.xmaxOp2) document.getElementById('xmaxOp2').value = s.xmaxOp2;
+        if(s.xminOp3) document.getElementById('xminOp3').value = s.xminOp3;
+        if(s.xmaxOp3) document.getElementById('xmaxOp3').value = s.xmaxOp3;
         if(s.shiftX) {
             document.getElementById('shiftX').value = s.shiftX;
             state.shiftX = parseFloat(s.shiftX);
